@@ -21,6 +21,8 @@ const onednn_headers = [
 ]
 
 # Includes for Clang.jl
+#
+# Why does `CLANG_INCLUDES` not exist?
 #const clang_includes = [CLANG_INCLUDES]
 #const clang_includes = String[]
 
@@ -33,12 +35,13 @@ function wrap_header(top_hdr::AbstractString, cursor_header::AbstractString)
 end
 
 function wrap_cursor(cursor_name::AbstractString, cursor)
+    # As far as I can tell - we don't really need any of the Macros defined in DNNL.
+    # So, just skip emitting them.
     if isa(cursor, Clang.CLMacroDefinition) || isa(cursor, Clang.CLMacroInstantiation)
         return false
     end
     return true
 end
-
 
 # # Mapping of header files to Julia files
 # function julia_file(header::AbstractString)
@@ -60,7 +63,6 @@ end
 #####
 ##### Context Creation
 #####
-
 
 const context = init(;
     common_file = joinpath(outpath, "types.jl"),
