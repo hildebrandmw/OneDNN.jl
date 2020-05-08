@@ -10,8 +10,8 @@ macro apicall(expr)
     # If it's anything other than "success", then we throw an error :D
     return quote
         ret = $(esc(expr))
-        if ref != Lib.dnnl_success
-            error("DNNL Failure: $ref")
+        if ret != Lib.dnnl_success
+            error("DNNL Failure: $ret")
         end
         ret
     end

@@ -26,7 +26,6 @@ const onednn_headers = [
 #const clang_includes = [CLANG_INCLUDES]
 #const clang_includes = String[]
 
-# Callback to test if a header should actually be wrapped.
 function wrap_header(top_hdr::AbstractString, cursor_header::AbstractString)
     if occursin("dnnl", cursor_header)
         return true
@@ -34,11 +33,21 @@ function wrap_header(top_hdr::AbstractString, cursor_header::AbstractString)
     return false
 end
 
+const REMOVE_MACROS = [
+    "DNNL_RUNTIME_DIM_VAL",
+    "DNNL_RUNTIME_S32_VAL",
+    "DNNL_MEMORY_NONE",
+]
+
 function wrap_cursor(cursor_name::AbstractString, cursor)
-    # As far as I can tell - we don't really need any of the Macros defined in DNNL.
-    # So, just skip emitting them.
-    if isa(cursor, Clang.CLMacroDefinition) || isa(cursor, Clang.CLMacroInstantiation)
-        return false
+    # There's one macro definition we have to snipe.
+    if isa(cursor, Clang.CLMacroDefinition)
+        # Remove the macros we don't want.
+        if in(cursor_name, REMOVE_MACROS)
+            return false
+        else
+            return true
+        end
     end
     return true
 end
@@ -85,13 +94,11 @@ function wrap_onednn_api(expr::Expr)
         function_body = expr.args[2]
         expr.args[2] = MacroTools.postwalk(function_body) do x
             if x == :dnnl_dims_t
-                printstyled(stdout, "Found a Dims\n"; color = :cyan)
                 return :(Ptr{dnnl_dim_t})
             else
                 return x
             end
         end
-        println(expr)
     end
     return [expr]
 end
