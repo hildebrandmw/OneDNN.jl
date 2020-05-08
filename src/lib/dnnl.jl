@@ -186,8 +186,9 @@ function dnnl_memory_desc_equal(lhs, rhs)
     ccall((:dnnl_memory_desc_equal, dnnl), Cint, (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), lhs, rhs)
 end
 
-function dnnl_memory_desc_get_size()
-    ccall((:dnnl_memory_desc_get_size, dnnl), Cint, ())
+function dnnl_memory_desc_get_size(memory_desc)
+    #= /home/mark/projects/OneDNN/scripts/wrap.jl:100 =#
+    ccall((:dnnl_memory_desc_get_size, dnnl), Cint, (Ptr{dnnl_memory_desc_t},), memory_desc)
 end
 
 function dnnl_memory_create(memory, memory_desc, engine, handle)

@@ -90,7 +90,20 @@ wrap_onednn_api(notexpr) = Any[notexpr]
 function wrap_onednn_api(expr::Expr)
     # Check if this is aa ccall
     if expr.head == :function
-        # Use the powerful MacroTools to transform `dnnl_dims_t` to `Ptr{dnnl_dim_t}`.
+        # Handle special cases.
+        #
+        # For some reason, the argument to this method is not captured.
+        # I have no idea why ...
+        if expr.args[1].args[1] == :dnnl_memory_desc_get_size
+            expr = :(
+                function dnnl_memory_desc_get_size(memory_desc)
+                    ccall((:dnnl_memory_desc_get_size, dnnl), Cint, (Ptr{dnnl_memory_desc_t},), memory_desc)
+                end
+            )
+            return [expr]
+        end
+
+        # use the powerful macrotools to transform `dnnl_dims_t` to `ptr{dnnl_dim_t}`.
         function_body = expr.args[2]
         expr.args[2] = MacroTools.postwalk(function_body) do x
             if x == :dnnl_dims_t

@@ -11,7 +11,9 @@ import NNlib
 include("lib/lib.jl")
 include("utils.jl")
 include("memory.jl")
-include("eltwise.jl")
+include("dispatch.jl")
+include("primitive.jl")
+include("initializer.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()

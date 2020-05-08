@@ -242,7 +242,7 @@ end
     dnnl_aBCdef16b16c = 114
     dnnl_aBCdef16c16b = 115
     dnnl_aBCdef4c16b4c = 116
-    dnnl_aBCdef2c8b4c = 117
+    dnnl_aBCdef3c8b4c = 117
     dnnl_aBCdef4c8b2c = 118
     dnnl_aBCdef2b4c2b = 119
     dnnl_aBcdef4b = 120

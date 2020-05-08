@@ -42,6 +42,12 @@ function memorydesc(::Type{T}, dims::NTuple{N,Int}) where {T,N}
     return handle[]
 end
 
+function Base.:(==)(a::Ref{Lib.dnnl_memory_desc_t}, b::Ref{Lib.dnnl_memory_desc_t})
+    return Bool(Lib.dnnl_memory_desc_equal(a, b))
+end
+
+getsize(a::Ref{Lib.dnnl_memory_desc_t}) = Lib.dnnl_memory_desc_get_size(a)
+
 # As always, make this mutable so we can finalize the C pointers we are holding onto.
 mutable struct Memory{A <: AbstractArray}
     # The underlying array that is supplying the data.
@@ -51,7 +57,11 @@ mutable struct Memory{A <: AbstractArray}
     memory::Lib.dnnl_memory_t
     engine::Engine
 
-    function Memory(A::AbstractArray, engine = GLOBAL_ENGINE[])
+    function Memory(
+            A::AbstractArray,
+            engine = GLOBAL_ENGINE[]
+        )
+
         handle = Ref{Lib.dnnl_memory_t}()
         desc = memorydesc(A)
         ret = Lib.dnnl_memory_create(
@@ -71,4 +81,20 @@ end
 
 # Convenience method for creating destionation memories from a source memory.
 Base.copy(M::Memory) = Memory(similar(M.array), M.engine)
+
+memorywrap(M::Memory) = M
+memorywrap(A::AbstractArray) = Memory(A)
+getdata(x::Memory) = x.array
+getdata(x::AbstractArray) = x
+
+# Find the canonical enum representation for format `T`.
+#
+# Implement this as an @generated function to allow us to use the format as a type
+# parameter to auto-dectect necessary format conversions.
+@generated canonical_format(::Val{T}) where {T} = :(Lib.$(findname(T)))
+function findname(v)
+    for (name, val) in Lib.CEnum.name_value_pairs(Lib.dnnl_format_tag_t)
+        val == v && return name
+    end
+end
 
