@@ -30,12 +30,14 @@ nproc = parse(Int, read(`nproc`, String))
 
 cd(builddir)
 
+buildtype = "DEBUG"
+
 cmake_args = [
     # configure cmake and installation dir.
     "-DCMAKE_C_COMPILER=$CC",
     "-DCMAKE_CXX_COMPILER=$CXX",
     "-DCMAKE_INSTALL_PREFIX=$(joinpath(@__DIR__, "usr"))",
-    "-DCMAKE_BUILD_TYPE=DEBUG",
+    "-DCMAKE_BUILD_TYPE=$buildtype",
     # oneDNN options
     "-DDNNL_LIBRARY_TYPE=SHARED",
 ]
