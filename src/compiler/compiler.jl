@@ -1,9 +1,8 @@
 # Use Mjlonir to trace the IR of a function.
 # Find primitives that can map to DNNL kernels - generate those kernels and then modify the
 # IR for those kernels.
-import Mjolnir
-import Mjolnir: @abstract, Const, Shape, Partial, AType
-
+using Mjolnir: Mjolnir, @abstract, Const, Shape, Partial, AType
+using IRTools: IRTools
 
 struct DNNLPrimitives end
 
@@ -24,6 +23,58 @@ function tracetype(x)
         map(f -> f => tracetype(getfield(x, f)), fieldnames(typeof(x)))...)
     )
 end
+
+####
+#### Compiler
+####
+
+trace(Ts...) = Mjolnir.trace(DNNLContext(), tracetype.(Ts)...)
+
+# TODO: Remove constant arguments??
+function compile(ir::IRTools.Inner.IR)
+    return IRTools.func(ir)
+end
+
+#####
+##### Utils
+#####
+
+# Find the type of an IRTools Variable
+function vartype(ir::IRTools.Inner.IR, var::IRTools.Variable)
+    # Is this an argument?
+    i = findfirst(isequal(var), IRTools.arguments(ir))
+    isnothing(i) || return IRTools.argtypes(ir)[i]
+
+    # Not an argument, find the defining statement.
+    return ir[var].type
+end
+
+#####
+##### Passes
+#####
+
+# Transform Certain IR Patterns to OneDNN Primitives
+function dense_replacement(ir::IRTools.Inner.IR)
+    map!(ir) do expr
+        # only look at expressions that are Expr types.
+        # for all other types, just do the identity.
+        isa(expr, Expr) || return expr
+
+        # Match falls to variables
+        if expr.head == :call && expr.args[1] isa IRTools.Inner.Variable
+            # Check the type of the variable. If it is a call to Dense, replace it.
+            if vartype(ir, expr.args[1]) isa Partial{<:Flux.Dense}
+                # TODO: Construct a primitive implementing Dense from OneDNN
+                println("Found a Dense!")
+            end
+        end
+        return expr
+    end
+end
+
+#####
+##### abstract
+#####
 
 # This is copied over from the `Mjolnir` repo
 # The default implementation of broadcasted computed `A` below as the return type of
@@ -46,7 +97,13 @@ end
 
 @abstract DNNLPrimitives function Base.materialize(bc::Base.Broadcast.Broadcasted)
     A = Core.Compiler.return_type(Base.materialize, Tuple{Mjolnir.widen(bc)})
-    return Mjolnir.Shape{A}(bc.size)
+    if bc isa Const
+        return Const(materialize(bc.value))
+    elseif bc isa Shape
+        return Mjolnir.Shape{A}(bc.size)
+    else
+        return A
+    end
 end
 
 #####
@@ -63,5 +120,26 @@ end
     # For now, assume A and B are Shapes
     @assert A.size[2] == B.size[1]
     return Shape{Array{T,1}}((A.size[1],))
+end
+
+# Dense
+@abstract DNNLPrimitives function (layer::L)(x::U) where {L <: Flux.Dense, U <: AbstractArray{T}}
+    # For now - assume that everything isa Shape
+    @assert layer.value.W isa Shape
+    @assert layer.value.b isa Shape
+    @assert x isa Shape
+
+    # Determine the number of output rows
+    output_rows = layer.value.b.size[1]
+
+    if x isa Shape{<:AbstractVector}
+        output_shape = (output_rows,)
+    elseif x isa Shape{<:AbstractMatrix}
+        output_shape = (output_rows, x.size[2])
+    else
+        error()
+    end
+
+    return Shape{U}(output_shape)
 end
 

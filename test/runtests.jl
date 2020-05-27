@@ -1,9 +1,11 @@
 using OneDNN
 using NNlib
+using Mjolnir
 
 # stdlib
 using Test
 using Random
+
 
 @testset "OneDNN.jl" begin
     x = randn(Float32, 10, 10, 10, 10)
