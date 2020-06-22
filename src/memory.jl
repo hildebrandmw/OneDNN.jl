@@ -28,12 +28,20 @@ dnnl_dims(::Tuple{}) = dnnl_dims()
 # Canonical formats
 #
 # Since Julia is column major, we have to reverse the order
+abstract type AbstractFormatContext end
+struct OutputContext <: AbstractFormatContext end
+
 dnnl_format(::Val{1}) = Lib.dnnl_a
 dnnl_format(::Val{2}) = Lib.dnnl_ba
 dnnl_format(::Val{3}) = Lib.dnnl_acb
 dnnl_format(::Val{4}) = Lib.dnnl_abdc
 
 dnnl_format(x::DenseArray{T,N}) where {T,N} = dnnl_format(Val{N}())
+
+dnnl_format(::OutputContext, ::Val{1}) = Lib.dnnl_a
+dnnl_format(::OutputContext, ::Val{2}) = Lib.dnnl_ab
+dnnl_format(::OutputContext, ::Val{3}) = Lib.dnnl_abc
+dnnl_format(::OutputContext, ::Val{4}) = Lib.dnnl_abcd
 
 # Create a memory descriptor for a DenseArray.
 memorydesc(x::DenseArray{T,N}) where {T,N} = memorydesc(T, size(x), dnnl_format(x))
@@ -89,6 +97,7 @@ end
 # Convenience method for creating destionation memories from a source memory.
 Base.size(M::Memory) = size(M.array)
 Base.eltype(M::Memory) = eltype(M.array)
+val_ndims(M::Memory{A}) where {T,N, A <: AbstractArray{T,N}} = Val{N}()
 
 function memorydesc(M::Memory)
     md = Ref{Ptr{Lib.dnnl_memory_desc_t}}()
@@ -98,6 +107,7 @@ end
 
 memorywrap(M::Memory) = M
 memorywrap(A::AbstractArray) = Memory(A)
+
 getdata(x::Memory) = x.array
 getdata(x::AbstractArray) = x
 

@@ -8,6 +8,7 @@ module OneDNN
 include("lib/lib.jl")
 include("utils.jl")
 include("memory.jl")
+include("execute.jl")
 include("ops/matmul.jl")
 
 #include("dispatch.jl")
