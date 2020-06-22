@@ -14,7 +14,7 @@ mkpath(outpath)
 
 # Find the relevant headers.
 # We're just looking for `dnnl.h` and `dnnl_types.h`.
-const include_dir = joinpath(dirname(@__DIR__), "deps", "usr", "include")
+const include_dir = joinpath(dirname(@__DIR__), "deps", "dnnl", "include")
 
 const onednn_headers = [
     joinpath(include_dir, "dnnl.h"),

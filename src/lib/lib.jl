@@ -5,8 +5,8 @@ import Libdl
 using CEnum
 
 const PKGDIR = dirname(dirname(@__DIR__))
-const USRDIR = joinpath(PKGDIR, "deps", "usr")
-const LIBDIR = joinpath(USRDIR, "lib64")
+const USRDIR = joinpath(PKGDIR, "deps", "dnnl")
+const LIBDIR = joinpath(USRDIR, "lib")
 
 const _flags = Libdl.RTLD_LAZY | Libdl.RTLD_GLOBAL
 

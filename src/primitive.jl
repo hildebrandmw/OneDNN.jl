@@ -45,7 +45,7 @@ function invoke!(P::Primitive)
     return nothing
 end
 
-arg(x...) = Lib.dnnl_exec_arg_t(x...)
+#arg(x...) = Lib.dnnl_exec_arg_t(x...)
 
 getdesc(P::Primitive) = getdesc(P.handle)
 function getdesc(handle::Lib.dnnl_primitive_t)
