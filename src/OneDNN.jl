@@ -10,6 +10,9 @@ include("utils.jl")
 include("memory.jl")
 include("execute.jl")
 include("ops/matmul.jl")
+include("ops/reorder.jl")
+
+include("postops.jl")
 
 #include("dispatch.jl")
 #include("primitive.jl")
@@ -26,5 +29,8 @@ function __init__()
     GLOBAL_ENGINE[] = Engine(Lib.dnnl_cpu)
     GLOBAL_STREAM[] = Stream(GLOBAL_ENGINE[])
 end
+
+global_engine() = GLOBAL_ENGINE[].handle
+global_stream() = GLOBAL_STREAM[].handle
 
 end # module

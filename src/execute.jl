@@ -9,7 +9,7 @@ function execute!(primitive_desc::Lib.dnnl_primitive_desc_t, args)
     # Execute the primitive and wait for the results
     @apicall Lib.dnnl_primitive_execute(
         primitive[],
-        GLOBAL_STREAM[].handle,
+        global_stream(),
         length(args),
         args
     )
@@ -21,21 +21,21 @@ function execute!(primitive_desc::Lib.dnnl_primitive_desc_t, args)
     return nothing
 end
 
-function primitive_descriptor(f, args...)
+function primitive_descriptor(f, args...; attributes = Ptr{Nothing}())
     # Construct the primitive descriptor from the arguments
     primitive_desc = Ref{Lib.dnnl_primitive_desc_t}()
     @apicall Lib.dnnl_primitive_desc_create(
         primitive_desc,
         args...,
-        Ptr{Nothing}(),
-        GLOBAL_ENGINE[].handle,
+        attributes,
+        global_engine(),
         Ptr{Nothing}(),
     )
 
     # Pass the constructed primitive descriptor to the function.
     f(primitive_desc[])
 
-    # Cleanup the primitive
+    # Cleanup the primitive descriptor
     @apicall Lib.dnnl_primitive_desc_destroy(primitive_desc[])
     return nothing
 end

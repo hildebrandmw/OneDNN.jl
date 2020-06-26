@@ -21,7 +21,8 @@ end
 ##### Global Stuff
 #####
 
-arg(x...) = Lib.dnnl_exec_arg_t(x...)
+toarg(x) = x
+arg(x...) = Lib.dnnl_exec_arg_t(toarg.(x)...)
 
 # Should only need to create one engine and stream and hold onto these as "singletons"
 
