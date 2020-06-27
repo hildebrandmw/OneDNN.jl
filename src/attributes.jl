@@ -7,7 +7,7 @@ struct Attributes
 end
 
 function Attributes()
-    val = Ref{Lib.dnnl_primitive_attr_t}
+    val = Ref{Lib.dnnl_primitive_attr_t}()
     @apicall Lib.dnnl_primitive_attr_create(val)
 
     finalizer(val) do _val
@@ -23,8 +23,8 @@ struct PostOps
 end
 
 function PostOps()
-    val = Ref{dnnl_ops_t}()
-    @apicall Lib.dnnl_post_ops_create(po)
+    val = Ref{Lib.dnnl_post_ops_t}()
+    @apicall Lib.dnnl_post_ops_create(val)
 
     finalizer(val) do _val
         @apicall Lib.dnnl_post_ops_destroy(_val[])
@@ -38,4 +38,4 @@ function appendsum!(P::PostOps, scale = one(Float32))
     return nothing
 end
 
-set_postops!(a::Attributes, p::PostOps) = @apicall Lib.dnnl_primitive_attr_set_post_ops(a, p)
+add!(a::Attributes, p::PostOps) = @apicall Lib.dnnl_primitive_attr_set_post_ops(a.val[], p.val[])

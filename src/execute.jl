@@ -21,13 +21,16 @@ function execute!(primitive_desc::Lib.dnnl_primitive_desc_t, args)
     return nothing
 end
 
+getptr(ptr::Ptr) = ptr
+getptr(attr::Attributes) = attr.val[]
+
 function primitive_descriptor(f, args...; attributes = Ptr{Nothing}())
     # Construct the primitive descriptor from the arguments
     primitive_desc = Ref{Lib.dnnl_primitive_desc_t}()
     @apicall Lib.dnnl_primitive_desc_create(
         primitive_desc,
         args...,
-        attributes,
+        getptr(attributes),
         global_engine(),
         Ptr{Nothing}(),
     )

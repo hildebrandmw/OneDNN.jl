@@ -26,7 +26,11 @@ function matmul(a, b; kw...)
     return dst
 end
 
-function matmul!(c, a, b; postops = nothing)
+function matmul!(c, a, b; kw...)
+    c = memory(c)
+    a = memory(a)
+    b = memory(b)
+
     # Construct the primitive descriptor
     matmul_d = Ref{Lib.dnnl_matmul_desc_t}()
     @apicall Lib.dnnl_matmul_desc_init(
@@ -45,7 +49,7 @@ function matmul!(c, a, b; postops = nothing)
     ]
 
     # Create the primitive descriptor, then the primitive, then execute it.
-    primitive_descriptor(x -> execute!(x, args), matmul_d)
+    primitive_descriptor(x -> execute!(x, args), matmul_d; kw...)
     return nothing
 end
 

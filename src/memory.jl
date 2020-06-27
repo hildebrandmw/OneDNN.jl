@@ -14,6 +14,8 @@ dnnl_type(::T) where {T} = error("No DNNL type for $T")
 swapleading(a, b, x...) = (b, a, x...)
 swapleading(a) = (a,)
 
+swapdims(i) = (i <= 2) ? xor(i, one(i) << 1) : i
+
 # Make a DIMS array
 #
 # These arrays are constant size in DNNL, but are apparently passed around as pointers,
@@ -37,6 +39,7 @@ abstract type AbstractFormatContext end
 struct DefaultContext <: AbstractFormatContext end
 struct TransposeContext <: AbstractFormatContext end
 
+dnnl_format_any() = Lib.dnnl_format_tag_any
 # Since Julia is column major instead of row major, we have to permute the last two
 # dimensions in the format tag by default.
 dnnl_format(::DefaultContext, ::Val{1}) = Lib.dnnl_a
@@ -45,7 +48,9 @@ dnnl_format(::DefaultContext, ::Val{3}) = Lib.dnnl_acb
 dnnl_format(::DefaultContext, ::Val{4}) = Lib.dnnl_abdc
 
 dnnl_format(v::Val) = dnnl_format(DefaultContext(), v)
-dnnl_format(x::DenseArray{T,N}) where {T,N} = dnnl_format(Val{N}())
+
+dnnl_format(context, x::Union{DenseArray{T,N}, Base.ReshapedArray{T,N}}) where {T,N} = dnnl_format(context, Val{N}())
+dnnl_format(x::DenseArray{T,N}) where {T,N} = dnnl_format(DefaultContext(), Val{N}())
 
 dnnl_format(::TransposeContext, ::Val{1}) = Lib.dnnl_a
 dnnl_format(::TransposeContext, ::Val{2}) = Lib.dnnl_ab
@@ -86,8 +91,28 @@ function Base.show(io::IO, md::MemoryDesc)
 end
 
 
-# Create a memory descriptor for a DenseArray.
-memorydesc(x::DenseArray{T,N}) where {T,N} = memorydesc(T, size(x), dnnl_format(x))
+#####
+##### Memory Desc constructors in all their glory!
+#####
+
+function memorydesc(
+        x::Union{DenseArray{T}, Base.ReshapedArray{T}},
+        context = DefaultContext()
+    ) where {T}
+
+    return memorydesc(T, size(x), dnnl_format(context, x))
+end
+
+function memorydesc(x::LinearAlgebra.Transpose)
+    return memorydesc(x.parent, TransposeContext())
+end
+
+# batched transpose
+function memorydesc(x::Base.PermutedDimsArray{T,3,(2,1,3)}) where {T}
+    format = dnnl_format(TransposeContext(), Val{3}())
+    return memorydesc(T, size(x), format)
+end
+
 function memorydesc(::Type{T}, dims::NTuple{N,Int}, format = dnnl_format(Val{N}())) where {T,N}
     handle = Ref{MemoryDesc}()
     @apicall Lib.dnnl_memory_desc_init_by_tag(
@@ -101,13 +126,15 @@ function memorydesc(::Type{T}, dims::NTuple{N,Int}, format = dnnl_format(Val{N}(
     return handle[]
 end
 
-
-
 Base.:(==)(a::Ref{MemoryDesc}, b::Ref{MemoryDesc}) = Bool(Lib.dnnl_memory_desc_equal(a, b))
 Base.:(==)(a::MemoryDesc, b::MemoryDesc) = (Ref(a) == Ref(b))
 
 getbytes(a::Ref{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(a)
 getbytes(a::MemoryDesc) = getbytes(Ref(a))
+
+#####
+##### Memory
+#####
 
 # As always, make this mutable so we can finalize the C pointers we are holding onto.
 mutable struct Memory{A <: AbstractArray,N}
@@ -143,7 +170,7 @@ end
 memory(A::AbstractArray) = Memory(A, size(A), creatememory(A))
 memory(M::Memory) = M
 
-function creatememory(A::DenseArray, desc::Lib.dnnl_memory_desc_t = memorydesc(A))
+function creatememory(A::AbstractArray, desc::Lib.dnnl_memory_desc_t = memorydesc(A))
     handle = Ref{Lib.dnnl_memory_t}()
     @apicall Lib.dnnl_memory_create(
         handle,
@@ -156,6 +183,8 @@ end
 
 # Convenience method for creating destionation memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
+Base.size(M::Memory, i) = size(M)[i]
+
 Base.eltype(M::Memory) = eltype(M.array)
 val_ndims(M::Memory{A,N}) where {A,N} = Val{N}()
 Base.ndims(M::Memory{A,N}) where {A,N} = N

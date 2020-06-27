@@ -1,5 +1,7 @@
 module OneDNN
 
+import LinearAlgebra
+
 #####
 ##### deps
 #####
@@ -7,18 +9,15 @@ module OneDNN
 # Include auto-generated wrapper for OneDNN
 include("lib/lib.jl")
 include("utils.jl")
+include("attributes.jl")
+
 include("memory.jl")
 include("execute.jl")
+
+# ops
+include("ops/concat.jl")
 include("ops/matmul.jl")
 include("ops/reorder.jl")
-
-include("postops.jl")
-
-#include("dispatch.jl")
-#include("primitive.jl")
-#include("initializer.jl")
-
-#include("compiler/compiler.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()

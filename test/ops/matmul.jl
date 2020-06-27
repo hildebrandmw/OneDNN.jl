@@ -14,4 +14,23 @@
 
     # Does multiplication actuall return the correct result?
     @test isapprox(OneDNN.materialize(c), a * b)
+
+    # Test applying some post ops
+    x = rand(Float32, 2, 2)
+    y = rand(Float32, 2, 2)
+    z = rand(Float32, 2, 2)
+
+    # expected result
+    expected = (x * y) + (transpose(z) * x)
+
+    out = OneDNN.matmul(x,y)
+
+    postops = OneDNN.PostOps()
+    OneDNN.appendsum!(postops)
+    attr = OneDNN.Attributes()
+    OneDNN.add!(attr, postops)
+    OneDNN.matmul!(out, transpose(z), x; attributes = attr)
+
+    result = OneDNN.materialize(out)
+    @test isapprox(result, expected)
 end
