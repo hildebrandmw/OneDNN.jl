@@ -5,6 +5,7 @@
 struct Attributes
     val::Ref{Lib.dnnl_primitive_attr_t}
 end
+Base.unsafe_convert(::Type{Ptr{Nothing}}, x::Attributes) = x.val[]
 
 function Attributes()
     val = Ref{Lib.dnnl_primitive_attr_t}()
@@ -21,6 +22,7 @@ end
 struct PostOps
     val::Ref{Lib.dnnl_post_ops_t}
 end
+Base.unsafe_convert(::Type{Ptr{Nothing}}, x::PostOps) = x.val[]
 
 function PostOps()
     val = Ref{Lib.dnnl_post_ops_t}()
@@ -35,6 +37,16 @@ end
 
 function appendsum!(P::PostOps, scale = one(Float32))
     @apicall Lib.dnnl_post_ops_append_sum(P.val[], scale)
+    return nothing
+end
+
+function appendeltwise!(
+        P::PostOps,
+        f,
+        scale = Float32(1.0),
+    )
+
+    @apicall Lib.dnnl_post_ops_append_eltwise(P, scale, algkind(f)...)
     return nothing
 end
 

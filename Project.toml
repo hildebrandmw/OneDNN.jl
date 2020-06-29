@@ -5,17 +5,22 @@ version = "0.1.0"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
+CachedArrays = "ab676e89-bb37-4f49-b167-74749319f3dc"
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 IRTools = "7869d1d1-7146-5819-86e3-90919afe41df"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+ZygoteRules = "700de1a5-db45-46bc-99cf-38207098b444"
 
 [compat]
-julia = "1"
+julia = "1.4"
 
 [extras]
+Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [targets]
-test = ["Test"]
+test = ["Test", "Flux", "Zygote"]

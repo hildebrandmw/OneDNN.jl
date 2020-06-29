@@ -1,45 +1,57 @@
-# Given a primitive descriptor, create a primitive, excute it, and then destroy the primitive.
-execute!(primitive_desc::Ref, args) = execute!(primitive_desc[], args)
+#####
+##### Primitive Descriptor
+#####
 
-function execute!(primitive_desc::Lib.dnnl_primitive_desc_t, args)
-    # The primitive is an output parameters of the c function call
-    primitive = Ref{Lib.dnnl_primitive_t}()
-    @apicall Lib.dnnl_primitive_create(primitive, primitive_desc)
+# Hook to allow types to be converted into the correct value passing to OneDNN.
+pd_lower(x) = x
+pd_lower(attr::Attributes) = attr.val[]
+pd_lower(m::Memory) = memorydesc_ptr(m)
 
-    # Execute the primitive and wait for the results
+struct PrimitiveDescriptor
+    ptr::Lib.dnnl_primitive_desc_t
+end
+Base.unsafe_convert(::Type{Ptr{Nothing}}, pd::PrimitiveDescriptor) = pd.ptr
+
+# Hooko to allow overloading with Cassette.
+primitive_descriptor(args...) = primitive_descriptor(Lib.dnnl_primitive_desc_create, args...)
+function primitive_descriptor(f::Function, args...)
+    pd = Ref{Lib.dnnl_primitive_desc_t}()
+    @apicall f(pd, pd_lower.(args)...)
+    return PrimitiveDescriptor(pd[])
+end
+
+function destroy(x::PrimitiveDescriptor)
+    @apicall Lib.dnnl_primitive_desc_destroy(x)
+    return nothing
+end
+destroy(x...) = destroy.(x)
+
+#####
+##### Primitive
+#####
+
+struct Primitive
+    ptr::Lib.dnnl_primitive_t
+end
+Base.unsafe_convert(::Type{Ptr{Nothing}}, p::Primitive) = p.ptr
+
+function primitive(pd::PrimitiveDescriptor)
+    p = Ref{Lib.dnnl_primitive_t}()
+    @apicall Lib.dnnl_primitive_create(p, pd)
+    return Primitive(p[])
+end
+
+function execute!(p::Primitive, args)
     @apicall Lib.dnnl_primitive_execute(
-        primitive[],
+        p.ptr,
         global_stream(),
         length(args),
-        args
+        args,
     )
 
-    @apicall Lib.dnnl_stream_wait(GLOBAL_STREAM[].handle)
-
-    # Destroy the primitive and return
-    @apicall Lib.dnnl_primitive_destroy(primitive[])
+    @apicall Lib.dnnl_stream_wait(global_stream())
     return nothing
 end
 
-getptr(ptr::Ptr) = ptr
-getptr(attr::Attributes) = attr.val[]
-
-function primitive_descriptor(f, args...; attributes = Ptr{Nothing}())
-    # Construct the primitive descriptor from the arguments
-    primitive_desc = Ref{Lib.dnnl_primitive_desc_t}()
-    @apicall Lib.dnnl_primitive_desc_create(
-        primitive_desc,
-        args...,
-        getptr(attributes),
-        global_engine(),
-        Ptr{Nothing}(),
-    )
-
-    # Pass the constructed primitive descriptor to the function.
-    f(primitive_desc[])
-
-    # Cleanup the primitive descriptor
-    @apicall Lib.dnnl_primitive_desc_destroy(primitive_desc[])
-    return nothing
-end
+destroy(p::Primitive) = @apicall Lib.dnnl_primitive_destroy(p)
 

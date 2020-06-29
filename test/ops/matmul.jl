@@ -4,7 +4,9 @@
     a = rand(Float32, 4, 2)
     b = rand(Float32, 2, 3)
 
-    c = OneDNN.matmul(a, b)
+    # We need to swap the order of `a` and `b` for compatibility between julia's column major
+    # behavior and OneDNN's row major.
+    c = OneDNN.matmul(b,a)
     @test isa(c, OneDNN.Memory)
     @test size(c) == (size(a, 1), size(b, 2))
 
@@ -23,13 +25,13 @@
     # expected result
     expected = (x * y) + (transpose(z) * x)
 
-    out = OneDNN.matmul(x,y)
+    out = OneDNN.matmul(y,x)
 
     postops = OneDNN.PostOps()
     OneDNN.appendsum!(postops)
     attr = OneDNN.Attributes()
     OneDNN.add!(attr, postops)
-    OneDNN.matmul!(out, transpose(z), x; attributes = attr)
+    OneDNN.matmul!(out, x, transpose(z); attributes = attr)
 
     result = OneDNN.materialize(out)
     @test isapprox(result, expected)

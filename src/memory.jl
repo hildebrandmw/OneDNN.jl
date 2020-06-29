@@ -10,12 +10,6 @@ dnnl_type(x::T) where {T <: Number} = dnnl_type(T)
 dnnl_type(::Type{T}) where {T} = error("No DNNL type for type $T")
 dnnl_type(::T) where {T} = error("No DNNL type for $T")
 
-# We swap the first two dimensions because that's the format OneDNN is expecting.
-swapleading(a, b, x...) = (b, a, x...)
-swapleading(a) = (a,)
-
-swapdims(i) = (i <= 2) ? xor(i, one(i) << 1) : i
-
 # Make a DIMS array
 #
 # These arrays are constant size in DNNL, but are apparently passed around as pointers,
@@ -24,44 +18,30 @@ swapdims(i) = (i <= 2) ? xor(i, one(i) << 1) : i
 function dnnl_dims(x::NTuple{N,Int64}) where {N}
     # Need to reverse the order of dimensions because C/C++ is row-major while Julia
     # is column major.
-    y = swapleading(x...)
-    f(i) = (i <= length(x)) ? Lib.dnnl_dim_t(y[N+1-i]) : zero(Lib.dnnl_dim_t)
+    f(i) = (i <= length(x)) ? Lib.dnnl_dim_t(x[N+1-i]) : zero(Lib.dnnl_dim_t)
     return [f(i) for i in 1:Lib.DNNL_MAX_NDIMS]
 end
 
 dnnl_dims() = zeros(Lib.dnnl_dim_t, Lib.DNNL_MAX_NDIMS)
 dnnl_dims(::Tuple{}) = dnnl_dims()
 
-# Canonical formats
-#
-# Since Julia is column major, we have to reverse the order
-abstract type AbstractFormatContext end
-struct DefaultContext <: AbstractFormatContext end
-struct TransposeContext <: AbstractFormatContext end
-
 dnnl_format_any() = Lib.dnnl_format_tag_any
+
 # Since Julia is column major instead of row major, we have to permute the last two
 # dimensions in the format tag by default.
-dnnl_format(::DefaultContext, ::Val{1}) = Lib.dnnl_a
-dnnl_format(::DefaultContext, ::Val{2}) = Lib.dnnl_ba
-dnnl_format(::DefaultContext, ::Val{3}) = Lib.dnnl_acb
-dnnl_format(::DefaultContext, ::Val{4}) = Lib.dnnl_abdc
+dnnl_format(::Val{1}) = Lib.dnnl_a
+dnnl_format(::Val{2}) = Lib.dnnl_ab
+dnnl_format(::Val{3}) = Lib.dnnl_abc
+dnnl_format(::Val{4}) = Lib.dnnl_abcd
 
-dnnl_format(v::Val) = dnnl_format(DefaultContext(), v)
-
-dnnl_format(context, x::Union{DenseArray{T,N}, Base.ReshapedArray{T,N}}) where {T,N} = dnnl_format(context, Val{N}())
-dnnl_format(x::DenseArray{T,N}) where {T,N} = dnnl_format(DefaultContext(), Val{N}())
-
-dnnl_format(::TransposeContext, ::Val{1}) = Lib.dnnl_a
-dnnl_format(::TransposeContext, ::Val{2}) = Lib.dnnl_ab
-dnnl_format(::TransposeContext, ::Val{3}) = Lib.dnnl_abc
-dnnl_format(::TransposeContext, ::Val{4}) = Lib.dnnl_abcd
+dnnl_format(x::AbstractArray{T,N}) where {T,N} = dnnl_format(Val{N}())
 
 #####
 ##### Memory Desc
 #####
 
 const MemoryDesc = Lib.dnnl_memory_desc_t
+MemoryDesc(x::MemoryDesc) = x
 
 logicalsize(md::MemoryDesc) = md.dims[1:md.ndims]
 
@@ -90,30 +70,25 @@ function Base.show(io::IO, md::MemoryDesc)
     return nothing
 end
 
-
 #####
 ##### Memory Desc constructors in all their glory!
 #####
 
-function memorydesc(
-        x::Union{DenseArray{T}, Base.ReshapedArray{T}},
-        context = DefaultContext()
-    ) where {T}
+memorydesc(x::AbstractArray{T}) where {T} = memorydesc(T, size(x), dnnl_format(x))
 
-    return memorydesc(T, size(x), dnnl_format(context, x))
-end
-
-function memorydesc(x::LinearAlgebra.Transpose)
-    return memorydesc(x.parent, TransposeContext())
-end
+memorydesc(x::LinearAlgebra.Transpose) = memorydesc(eltype(x), size(x), Lib.dnnl_ba)
 
 # batched transpose
 function memorydesc(x::Base.PermutedDimsArray{T,3,(2,1,3)}) where {T}
-    format = dnnl_format(TransposeContext(), Val{3}())
-    return memorydesc(T, size(x), format)
+    return memorydesc(T, size(x), Lib.dnnl_acb)
 end
 
-function memorydesc(::Type{T}, dims::NTuple{N,Int}, format = dnnl_format(Val{N}())) where {T,N}
+function memorydesc(
+        ::Type{T},
+        dims::NTuple{N,Int},
+        format = dnnl_format(Val{N}())
+    ) where {T,N}
+
     handle = Ref{MemoryDesc}()
     @apicall Lib.dnnl_memory_desc_init_by_tag(
         handle,
@@ -123,7 +98,7 @@ function memorydesc(::Type{T}, dims::NTuple{N,Int}, format = dnnl_format(Val{N}(
         format,
     )
 
-    return handle[]
+    return MemoryDesc(handle[])
 end
 
 Base.:(==)(a::Ref{MemoryDesc}, b::Ref{MemoryDesc}) = Bool(Lib.dnnl_memory_desc_equal(a, b))
@@ -157,7 +132,7 @@ mutable struct Memory{A <: AbstractArray,N}
             A::U,
             dims::NTuple{N,Int},
             memory::Lib.dnnl_memory_t
-        ) where {N,U <: AbstractArray}
+        ) where {U <: AbstractArray,N}
 
         object = new{U,N}(A, dims, memory)
         finalizer(object) do obj
@@ -168,7 +143,7 @@ mutable struct Memory{A <: AbstractArray,N}
 end
 
 memory(A::AbstractArray) = Memory(A, size(A), creatememory(A))
-memory(M::Memory) = M
+memory(M::Memory, x...) = M
 
 function creatememory(A::AbstractArray, desc::Lib.dnnl_memory_desc_t = memorydesc(A))
     handle = Ref{Lib.dnnl_memory_t}()
@@ -209,7 +184,7 @@ function Base.similar(
         M::Memory,
         ::Type{T} = eltype(M),
         dims::NTuple{N,Int} = size(M),
-        desc::MemoryDesc = memorydesc(M)
+        desc::MemoryDesc = memorydesc(M),
     ) where {T,N}
 
     # Number of bytes to allocate.
@@ -240,6 +215,7 @@ end
 # General `Memory` types can have arbitrary layouts.
 # If we're trying to get out a normal Julia array out of a wrapped `Memory` type, we may
 # have to perform a reorder before returing the final object.
+materialize(x::AbstractArray) = x
 function materialize(M::Memory{A,N}) where {A,N}
     # Use the `reorder` op.
     dst = reorder(M, dnnl_format(Val{N}()))

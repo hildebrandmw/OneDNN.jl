@@ -17,12 +17,12 @@
     sz = (1,2,3)
     dims = OneDNN.dnnl_dims(sz)
     @test length(dims) == OneDNN.Lib.DNNL_MAX_NDIMS
-    @test dims[1:length(sz)] == collect(reverse(OneDNN.swapleading(sz...)))
+    @test dims[1:length(sz)] == collect(reverse(sz))
     @test all(iszero, dims[length(sz)+1:OneDNN.Lib.DNNL_MAX_NDIMS])
     @test all(iszero, OneDNN.dnnl_dims())
     @test all(iszero, OneDNN.dnnl_dims(()))
 
-    x = rand(Float32, 3, 3)
+    x = rand(Float32, 2, 3)
     md = OneDNN.memorydesc(x)
 
     # OneDNN stores size information in reverse order from normal Julia
@@ -37,7 +37,7 @@
     ##### Memory
     #####
 
-    x = rand(Float32, 10, 10)
+    x = rand(Float32, 5, 10)
     X = OneDNN.memory(x)
 
     # The `memory_t` types in OneDNN return references to a cached MD.
@@ -53,5 +53,15 @@
     Y = similar(X)
     @test size(Y) == size(X)
     @test OneDNN.memorydesc(X) == OneDNN.memorydesc(Y)
+
+    #####
+    ##### Transposes
+    #####
+
+    x = rand(Float32, 10, 5)
+    X = OneDNN.memory(transpose(x))
+    @test size(X) == (5, 10)
+    XX = OneDNN.materialize(X)
+    @test XX == transpose(x)
 end
 

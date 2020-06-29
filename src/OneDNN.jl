@@ -2,6 +2,10 @@ module OneDNN
 
 import LinearAlgebra
 
+# ZygoteRules
+import ZygoteRules
+import Flux
+
 #####
 ##### deps
 #####
@@ -15,9 +19,11 @@ include("memory.jl")
 include("execute.jl")
 
 # ops
+include("ops/eltwise.jl")
+include("ops/reorder.jl")
 include("ops/concat.jl")
 include("ops/matmul.jl")
-include("ops/reorder.jl")
+include("ops/innerproduct.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()
