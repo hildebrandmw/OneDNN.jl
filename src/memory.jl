@@ -112,7 +112,7 @@ getbytes(a::MemoryDesc) = getbytes(Ref(a))
 #####
 
 # As always, make this mutable so we can finalize the C pointers we are holding onto.
-mutable struct Memory{A <: AbstractArray,N}
+mutable struct Memory{T,N,A <: AbstractArray{T}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
 
@@ -132,9 +132,9 @@ mutable struct Memory{A <: AbstractArray,N}
             A::U,
             dims::NTuple{N,Int},
             memory::Lib.dnnl_memory_t
-        ) where {U <: AbstractArray,N}
+           ) where {T, U <: AbstractArray{T},N}
 
-        object = new{U,N}(A, dims, memory)
+        object = new{T,N,U}(A, dims, memory)
         finalizer(object) do obj
             Lib.dnnl_memory_destroy(obj.memory)
         end
@@ -158,9 +158,13 @@ end
 
 # Convenience method for creating destionation memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
-Base.size(M::Memory, i) = size(M)[i]
+Base.eltype(M::Memory{T}) where {T} = T
+Base.getindex(M::Memory, i::Int) = error("Cannot `getindex` directly from a Memory")
+Base.setindex!(M::Memory, v, i::Int) = error("Cannot `setindex!` directly to a Memory")
 
-Base.eltype(M::Memory) = eltype(M.array)
+Base.display(M::Memory) = show(stdout, M)
+Base.show(io::IO, M::Memory{T}) where {T} = print(io, "OneDNN.Memory{$T} with logical size: $(size(M))")
+
 val_ndims(M::Memory{A,N}) where {A,N} = Val{N}()
 Base.ndims(M::Memory{A,N}) where {A,N} = N
 
@@ -218,8 +222,16 @@ end
 materialize(x::AbstractArray) = x
 function materialize(M::Memory{A,N}) where {A,N}
     # Use the `reorder` op.
-    dst = reorder(M, dnnl_format(Val{N}()))
+
+    # preallocate the destination so it has the correct dimensions.
+    dst_array = similar(M.array, eltype(M.array), size(M))
+    dst_desc = memorydesc(dst_array)
+
+    dst = Memory(dst_array, size(dst_array), creatememory(dst_array, dst_desc))
+    reorder!(dst, M)
 
     # Unpack the array and reshape.
-    return reshape(dst.array, size(dst))
+    return dst.array
 end
+
+Zygote.@adjoint materialize(x) = materialize(x), Δ -> (Δ,)

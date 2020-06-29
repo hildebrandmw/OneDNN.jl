@@ -161,6 +161,8 @@ end
 
 Dense(d::Flux.Dense) = Dense(memory(collect(transpose(d.W))), memory(d.b), d.σ)
 
+Flux.@functor Dense (W, b)
+
 function Dense(
         in::Integer,
         out::Integer,
@@ -180,6 +182,7 @@ function (D::Dense)(x; attributes = nothing, kind = Lib.dnnl_forward_inference)
         # If no external attributes are passed, construct a post-op for the activation
         # function.
         postops = PostOps()
+
         appendeltwise!(postops, D.σ)
         attributes = Attributes()
         add!(attributes, postops)
@@ -190,7 +193,7 @@ function (D::Dense)(x; attributes = nothing, kind = Lib.dnnl_forward_inference)
     return inner_product_forward(x, D.W, D.b; attributes = attributes, kind = kind)
 end
 
-function ZygoteRules._pullback(cx::ZygoteRules.AContext, D::Dense, x)
+function Zygote._pullback(cx::Zygote.AContext, D::Dense, x)
     mx = memory(x)
 
     # can we compute the pullback of the activation function from the destination?
@@ -211,11 +214,15 @@ function ZygoteRules._pullback(cx::ZygoteRules.AContext, D::Dense, x)
         diff_src = similar(mx)
 
         # backprop the activation function.
-        backprop_eltwise(D.σ, diff_dst)
+        diff_dst = backprop_eltwise_dst(D.σ, out, diff_dst)
 
         # Do the backprop operations
         inner_product_backward_data!(diff_src, D.W, diff_dst)
         inner_product_backward_weights!(mx, diff_weights, diff_bias, diff_dst)
+
+        # Accumulate these parameters
+        Zygote.accum_param(cx, D.W, diff_weights)
+        Zygote.accum_param(cx, D.b, diff_bias)
 
         return (
             (W = diff_weights, b = diff_bias, σ = nothing),

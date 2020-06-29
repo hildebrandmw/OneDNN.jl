@@ -1,9 +1,10 @@
 module OneDNN
 
+# stdlib
 import LinearAlgebra
 
-# ZygoteRules
-import ZygoteRules
+# julia ml
+import Zygote
 import Flux
 
 #####

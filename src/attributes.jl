@@ -40,6 +40,7 @@ function appendsum!(P::PostOps, scale = one(Float32))
     return nothing
 end
 
+appendeltwise!(P::PostOps, ::typeof(identity), scale = one(Float32)) = nothing
 function appendeltwise!(
         P::PostOps,
         f,
