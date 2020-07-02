@@ -6,6 +6,15 @@ import LinearAlgebra
 # julia ml
 import Zygote
 import Flux
+import NNlib
+
+# for primitive tracing
+import Cassette
+import MacroTools
+
+import TimerOutputs
+
+const to = TimerOutputs.TimerOutput()
 
 #####
 ##### deps
@@ -25,6 +34,9 @@ include("ops/reorder.jl")
 include("ops/concat.jl")
 include("ops/matmul.jl")
 include("ops/innerproduct.jl")
+
+# tracing
+include("tracer.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()

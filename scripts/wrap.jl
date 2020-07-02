@@ -97,7 +97,7 @@ function wrap_onednn_api(expr::Expr)
         if expr.args[1].args[1] == :dnnl_memory_desc_get_size
             expr = :(
                 function dnnl_memory_desc_get_size(memory_desc)
-                    ccall((:dnnl_memory_desc_get_size, dnnl), Cint, (Ptr{dnnl_memory_desc_t},), memory_desc)
+                    ccall((:dnnl_memory_desc_get_size, dnnl), Csize_t, (Ptr{dnnl_memory_desc_t},), memory_desc)
                 end
             )
             return [expr]

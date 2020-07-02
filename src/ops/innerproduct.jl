@@ -1,4 +1,7 @@
-inner_product_forward(x...; kw...) = inner_product_forward(memory.(x)...; kw...)
+function inner_product_forward(src, weights, bias; kw...)
+    inner_product_forward(memory(src), memory(weights), memory(bias); kw...)
+end
+
 function inner_product_forward(src::Memory, weights::Memory, bias::Memory; kw...)
     dst_dims = (size(weights, 2), size(src, ndims(src)))
     dst_eltype = out_eltype(eltype(src), eltype(weights))
@@ -11,7 +14,9 @@ function inner_product_forward(src::Memory, weights::Memory, bias::Memory; kw...
     return dst
 end
 
-inner_product_forward!(args...; kw...) = inner_product_forward!(memory.(args)...; kw...)
+function inner_product_forward!(dst, src, weights, bias; kw...)
+    inner_product_forward!(memory(dst), memory(src), memory(weights), memory(bias); kw...)
+end
 function inner_product_forward!(
         dst::Memory,
         src::Memory,
@@ -20,6 +25,7 @@ function inner_product_forward!(
         attributes = Ptr{Nothing}(),
         kind = Lib.dnnl_forward_inference,
     )
+
     # Op Descriptor
     # construct a temporary memory descriptor for `src` which will allow us to optimize
     # that format if needed.
@@ -206,7 +212,7 @@ function Zygote._pullback(cx::Zygote.AContext, D::Dense, x)
         error("Can't yet support activations that can't be fused")
     end
 
-    return out, Δ -> begin
+    return out, function dense_pullback(Δ)
         # Construct all the memory objects we will need.
         diff_dst = memory(Δ)
         diff_weights = similar(D.W)

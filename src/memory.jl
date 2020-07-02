@@ -198,19 +198,31 @@ function Base.similar(
     bytes_to_allocate = Int(getbytes(desc))
     @assert bytes_to_allocate >= sizeof(T) * prod(dims)
 
+    # If the bytes to allocate is larger than the product of the dims, then we need
+    # to extrude some dimension of our underlying array.
+    extrude_dims = extrude(T, dims, bytes_to_allocate)
+
     # Allocate the output array.
-    # Since for a general OneDNN format, the number of bytes required might be greater than
-    # the product of the dimensions.
-    #
-    # Therefore, we use a linear vector as the actual storage.
-    out = similar(
-        M.array,
-        T,
-        (div(bytes_to_allocate, sizeof(T)),)
-    )
+    out = similar(M.array, T, extrude_dims)
 
     return Memory(out, dims, creatememory(out, desc))
 end
+
+# Make sure we allocate a large enough array to hold all the results.
+#
+# It's okay for it to be a little bit larger.
+function extrude(::Type{T}, dims, bytes_to_allocate) where {T}
+    (bytes_to_allocate == sizeof(T) * prod(dims)) && return dims
+
+    # For now, just extrude the last dimension.
+    first = leading(dims...)
+    last_dimension = 1 + div(bytes_to_allocate - 1, sizeof(T) * prod(first))
+    return (first..., last_dimension)
+end
+
+leading(x, y, z...) = (x, leading(y, z...)...)
+leading(x, y) = (x,)
+leading(x) = ()
 
 #####
 ##### Converting `Memory` types to normal Arrays
@@ -220,7 +232,16 @@ end
 # If we're trying to get out a normal Julia array out of a wrapped `Memory` type, we may
 # have to perform a reorder before returing the final object.
 materialize(x::AbstractArray) = x
-function materialize(M::Memory{A,N}) where {A,N}
+function materialize(M::Memory{T,N}) where {T,N}
+    # If the format of this array is already in a standard format, just return a reshaped
+    # version of the underlying array.
+    #
+    # Otherwise, perform a specific reordering before materializing.
+    if memorydesc(T, size(M)) == memorydesc(M)
+        @assert size(M.array) == size(M)
+        return M.array
+    end
+
     # Use the `reorder` op.
 
     # preallocate the destination so it has the correct dimensions.

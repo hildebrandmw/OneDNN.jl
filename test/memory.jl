@@ -34,6 +34,26 @@
     @test md != OneDNN.memorydesc(rand(Float32, 3, 2))
 
     #####
+    ##### Extruding Dimensions
+    #####
+
+    @test OneDNN.leading(1) == ()
+    @test OneDNN.leading(1, 2) == (1,)
+    @test OneDNN.leading(1, 2, 3) == (1, 2)
+    @test OneDNN.leading(1, 2, 3, 4) == (1, 2, 3)
+    @test OneDNN.leading(1, 2, 3, 4,5) == (1, 2, 3, 4)
+
+    @test OneDNN.extrude(Float32, (10,), 4 * 12) == (12,)
+    @test OneDNN.extrude(Float32, (12,), 4 * 12) == (12,)
+    @test OneDNN.extrude(Float32, (12,), 4 * 13) == (13,)
+
+    @test OneDNN.extrude(Float32, (10, 10), 4 * 100) == (10, 10)
+    @test OneDNN.extrude(Float32, (10, 10), 4 * 101) == (10, 11)
+    @test OneDNN.extrude(Float32, (10, 10), 4 * 104) == (10, 11)
+
+    @test OneDNN.extrude(Float32, (2, 2, 2), 4 * 9) == (2, 2, 3)
+
+    #####
     ##### Memory
     #####
 

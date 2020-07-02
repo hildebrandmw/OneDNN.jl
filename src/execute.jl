@@ -15,8 +15,10 @@ Base.unsafe_convert(::Type{Ptr{Nothing}}, pd::PrimitiveDescriptor) = pd.ptr
 # Hooko to allow overloading with Cassette.
 primitive_descriptor(args...) = primitive_descriptor(Lib.dnnl_primitive_desc_create, args...)
 function primitive_descriptor(f::Function, args...)
-    pd = Ref{Lib.dnnl_primitive_desc_t}()
-    @apicall f(pd, pd_lower.(args)...)
+    TimerOutputs.@timeit to "Primitive Descriptors" begin
+        pd = Ref{Lib.dnnl_primitive_desc_t}()
+        @apicall f(pd, pd_lower.(args)...)
+    end
     return PrimitiveDescriptor(pd[])
 end
 
@@ -36,8 +38,10 @@ end
 Base.unsafe_convert(::Type{Ptr{Nothing}}, p::Primitive) = p.ptr
 
 function primitive(pd::PrimitiveDescriptor)
-    p = Ref{Lib.dnnl_primitive_t}()
-    @apicall Lib.dnnl_primitive_create(p, pd)
+    TimerOutputs.@timeit to "Primitives" begin
+        p = Ref{Lib.dnnl_primitive_t}()
+        @apicall Lib.dnnl_primitive_create(p, pd)
+    end
     return Primitive(p[])
 end
 
