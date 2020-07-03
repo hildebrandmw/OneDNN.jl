@@ -1,5 +1,5 @@
 #####
-##### Attributes and Post ops
+##### Attributes
 #####
 
 struct Attributes
@@ -18,6 +18,9 @@ function Attributes()
     return Attributes(val)
 end
 
+#####
+##### PostOps
+#####
 
 struct PostOps
     val::Ref{Lib.dnnl_post_ops_t}
@@ -51,4 +54,5 @@ function appendeltwise!(
     return nothing
 end
 
-add!(a::Attributes, p::PostOps) = @apicall Lib.dnnl_primitive_attr_set_post_ops(a.val[], p.val[])
+# Things that require both `Attributes` and `PostOps`
+add!(a::Attributes, p::PostOps) = @apicall Lib.dnnl_primitive_attr_set_post_ops(a, p)

@@ -12,9 +12,15 @@ struct PrimitiveDescriptor
 end
 Base.unsafe_convert(::Type{Ptr{Nothing}}, pd::PrimitiveDescriptor) = pd.ptr
 
-# Hooko to allow overloading with Cassette.
+# Many primitives just use `Lib.dnnl_primitive_desc_create`, so we apply that as a default
+# creation function.
+#
+# However, many others, (like convolution, matrix multiplication, etc) have their own
+# primitive descriptor creation functions.
+#
+# So, we allow the primitive creation function to be passed as well.
 primitive_descriptor(args...) = primitive_descriptor(Lib.dnnl_primitive_desc_create, args...)
-function primitive_descriptor(f::Function, args...)
+function primitive_descriptor(f::F, args...) where {F <: Function}
     TimerOutputs.@timeit to "Primitive Descriptors" begin
         pd = Ref{Lib.dnnl_primitive_desc_t}()
         @apicall f(pd, pd_lower.(args)...)

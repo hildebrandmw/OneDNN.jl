@@ -6,14 +6,14 @@ import LinearAlgebra
 # julia ml
 import Zygote
 import Flux
-import NNlib
 
 # for primitive tracing
+# note: primitive tracing ended up not working, the overhead from Cassette was too high.
 import Cassette
 import MacroTools
 
+# time how long some operations take
 import TimerOutputs
-
 const to = TimerOutputs.TimerOutput()
 
 #####

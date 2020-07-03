@@ -12,7 +12,7 @@ dnnl_type(::T) where {T} = error("No DNNL type for $T")
 
 # Make a DIMS array
 #
-# These arrays are constant size in DNNL, but are apparently passed around as pointers,
+# These arrays are constant size in DNNL, but are passed around as pointers,
 # so we just use normal Julia Arrays on this side, let `cconvert` convert them to pointers
 # for all the `ccall` operations and profit!
 function dnnl_dims(x::NTuple{N,Int64}) where {N}
@@ -25,16 +25,18 @@ end
 dnnl_dims() = zeros(Lib.dnnl_dim_t, Lib.DNNL_MAX_NDIMS)
 dnnl_dims(::Tuple{}) = dnnl_dims()
 
-dnnl_format_any() = Lib.dnnl_format_tag_any
-
-# Since Julia is column major instead of row major, we have to permute the last two
-# dimensions in the format tag by default.
+# Formats
+#
+# Be default, assume Julia arrays are in the NCHW order requested by OneDNN.
+# Usually, this ends up being fine. However, for things like matrix multiplication,
+# this can be problematic because OneDNN assumes arrays are row major.
 dnnl_format(::Val{1}) = Lib.dnnl_a
 dnnl_format(::Val{2}) = Lib.dnnl_ab
 dnnl_format(::Val{3}) = Lib.dnnl_abc
 dnnl_format(::Val{4}) = Lib.dnnl_abcd
 
 dnnl_format(x::AbstractArray{T,N}) where {T,N} = dnnl_format(Val{N}())
+dnnl_format_any() = Lib.dnnl_format_tag_any
 
 #####
 ##### Memory Desc
@@ -75,7 +77,6 @@ end
 #####
 
 memorydesc(x::AbstractArray{T}) where {T} = memorydesc(T, size(x), dnnl_format(x))
-
 memorydesc(x::LinearAlgebra.Transpose) = memorydesc(eltype(x), size(x), Lib.dnnl_ba)
 
 # batched transpose
@@ -142,8 +143,23 @@ mutable struct Memory{T,N,A <: AbstractArray{T}} <: AbstractArray{T,N}
     end
 end
 
-memory(A::AbstractArray) = Memory(A, size(A), creatememory(A))
+# Try to remove as many layers of wrapping around `A` as possible.
+# Since all of the dimension and layout information will be stored in the OneDNN
+# `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
+# cause down-stream type instabilities.
+memory(A::AbstractArray) = Memory(toparent(A), size(A), creatememory(A))
 memory(M::Memory, x...) = M
+
+# bottom case
+toparent(A::AbstractArray) = A
+
+const WrapperTypes = Union{
+    LinearAlgebra.Transpose,
+    Base.PermutedDimsArray,
+    Base.ReshapedArray,
+}
+
+toparent(A::WrapperTypes) = toparent(parent(A))
 
 function creatememory(A::AbstractArray, desc::Lib.dnnl_memory_desc_t = memorydesc(A))
     handle = Ref{Lib.dnnl_memory_t}()
@@ -210,7 +226,7 @@ end
 
 # Make sure we allocate a large enough array to hold all the results.
 #
-# It's okay for it to be a little bit larger.
+# It's okay for it to be a little bit larger than strictly necessary.
 function extrude(::Type{T}, dims, bytes_to_allocate) where {T}
     (bytes_to_allocate == sizeof(T) * prod(dims)) && return dims
 
@@ -237,14 +253,12 @@ function materialize(M::Memory{T,N}) where {T,N}
     # version of the underlying array.
     #
     # Otherwise, perform a specific reordering before materializing.
-    if memorydesc(T, size(M)) == memorydesc(M)
-        @assert size(M.array) == size(M)
+    if size(M.array) == size(M) && memorydesc(T, size(M)) == memorydesc(M)
         return M.array
     end
 
     # Use the `reorder` op.
-
-    # preallocate the destination so it has the correct dimensions.
+    # preallocate the destination so it has the correct dimensions and format
     dst_array = similar(M.array, eltype(M.array), size(M))
     dst_desc = memorydesc(dst_array)
 
@@ -255,4 +269,76 @@ function materialize(M::Memory{T,N}) where {T,N}
     return dst.array
 end
 
+# Materialization is basically a copy, so backprop is the identity.
+#
+# This lets us preserve formats on the backward pass.
 Zygote.@adjoint materialize(x) = materialize(x), Δ -> (Δ,)
+Zygote.@adjoint memory(x) = memory(x), Δ -> (Δ,)
+
+#####
+##### Views
+#####
+
+# We need to be really selective on how we can construct `Memory` from views.
+# Basically, we'll keep it very simple.
+#
+# 1. We will only accept views of basic array types (Array{T,N})
+# 2. Views must be expressible to OneDNN (basically, submemories)
+isviewcompatible(::Type) = false
+isviewcompatible(::Type{<:Array}) = true
+
+# Forward `ReshapedArrays` to the parent array.
+isviewcompatible(::Type{<:Base.ReshapedArray{T,N,P}}) where {T,N,P} = isviewcompatible(P)
+
+# We can only accept certain types for views into OneDNN Memory objects.
+# These must be contiguous and non-reversed.
+const AcceptableViewIndexTypes = Union{
+    Base.Slice{<:Base.OneTo},
+    Base.UnitRange,
+    Integer,
+}
+
+acceptable_view_error(::AcceptableViewIndexTypes) = nothing
+function acceptable_view_error(::T) where {T}
+    error("Indices of Type $T are not supported for Memory Views")
+end
+
+function memorydesc(x::SubArray{T,N,P,I,L}) where {T,N,P,I,L}
+    # First, check that the parent array is view comparible
+    if !isviewcompatible(P)
+        error("Views of $P cannot be expressed as OneDNN Tensors")
+    end
+
+    # Next, make sure that the indices of this subarray express a submemory (and not some
+    # kind of slanted/reversed view)
+    acceptable_view_error.(x.indices)
+
+    # Now, we need to create a memory description for the parent, so we can make a submemory
+    # description for this region.
+    dims = size(x)
+    offsets = first.(x.indices) .- 1
+
+    parent_md = memorydesc(parent(x))
+    md = Ref{MemoryDesc}()
+    @apicall Lib.dnnl_memory_desc_init_submemory(
+        md,
+        Ref(parent_md),
+        dnnl_dims(dims),
+        dnnl_dims(offsets),
+    )
+    return md[]
+end
+
+# Since we only create Memory's directly from views (and not the other way around), we
+# can make cheap materialization by just returning the view.
+materialize(x::Memory{T,N,<:SubArray{T,N}}) where {T,N} = x.array
+
+#####
+##### Zygote Compatibility
+#####
+
+# For not, just fallback to Julia addition.
+function Zygote.accum(x::Memory, y::AbstractArray)
+    @time out = memory(copy(materialize(x)) .+ copy(materialize(y)))
+    return out
+end

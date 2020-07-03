@@ -34,6 +34,27 @@
     @test md != OneDNN.memorydesc(rand(Float32, 3, 2))
 
     #####
+    ##### Unwrapping Wrapper Types
+    #####
+
+    x = randn(Float32, 10, 20)
+    @test OneDNN.toparent(x) === x
+    @test OneDNN.toparent(transpose(x)) === x
+    @test OneDNN.toparent(reshape(transpose(x), :)) === x
+
+    # Views must be materialized in order to pass to OneDNN
+    #@test OneDNN.toparent(view(x, 1:2, 1:2)) == x
+
+    # batched transpose
+    x = randn(Float32, 5, 10, 15)
+    p = PermutedDimsArray(x, (2,1,3))
+    @test OneDNN.toparent(p) === x
+    @test OneDNN.toparent(reshape(p, :)) === x
+
+    # Views must be materialized in order to pass to OneDNN
+    #@test OneDNN.toparent(view(x, 1:2, 1:2, :)) === x
+
+    #####
     ##### Extruding Dimensions
     #####
 
@@ -74,6 +95,13 @@
     @test size(Y) == size(X)
     @test OneDNN.memorydesc(X) == OneDNN.memorydesc(Y)
 
+    # Do view work correctly?
+    x = rand(Float32, 5, 10)
+    vx = view(x, 1:2, :)
+    VX = OneDNN.memory(vx)
+    @test size(VX) == size(vx)
+    @test OneDNN.materialize(VX) == vx
+
     #####
     ##### Transposes
     #####
@@ -83,5 +111,25 @@
     @test size(X) == (5, 10)
     XX = OneDNN.materialize(X)
     @test XX == transpose(x)
+
+    # batched transpose
+    x = PermutedDimsArray(rand(Float32, 10, 20, 30), (2,1,3))
+    X = OneDNN.memory(x)
+    @test size(X) == (20, 10, 30)
+    XX = OneDNN.materialize(X)
+
+    # the resulting array should be element wise equal, but since we told it the layout
+    # was different, it should be an entirely new array.
+    @test XX == x
+    @test XX !== x
+end
+
+@testset "Testing Views" begin
+    #x = rand(Float32, 10, 10)
+    #X = OneDNN.memory(x)
+
+    #@test OneDNN.materialize(view(X, :, 1)) == view(x, :, 1)
+    # Julia returns a vector ... OneDNN returns an array
+    #@test OneDNN.materialize(view(X, 1, :)) == view(x, 1, :)
 end
 

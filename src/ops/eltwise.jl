@@ -5,7 +5,7 @@
 #end
 
 #####
-##### Traits
+##### Compatibility layer from Julia eltwise functions to OneDNN eltwise functions
 #####
 
 algkind(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu, zero(Float32), zero(Float32))
