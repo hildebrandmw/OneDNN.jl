@@ -19,6 +19,21 @@ function Attributes()
 end
 
 #####
+##### Scale
+#####
+
+function setscale!(attr::Attributes, scale::Number)
+    @apicall Lib.dnnl_primitive_attr_set_output_scales(
+        attr,
+        # Only one scale - applied to the whole output tensor
+        1,
+        0,
+        Ref(convert(Float32, scale)),
+    )
+    return nothing
+end
+
+#####
 ##### PostOps
 #####
 

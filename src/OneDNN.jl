@@ -30,6 +30,7 @@ include("execute.jl")
 
 # ops
 include("ops/eltwise.jl")
+include("ops/binary.jl")
 include("ops/reorder.jl")
 include("ops/concat.jl")
 include("ops/matmul.jl")

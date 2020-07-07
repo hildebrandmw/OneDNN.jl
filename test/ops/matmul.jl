@@ -35,4 +35,13 @@
 
     result = OneDNN.materialize(out)
     @test isapprox(result, expected)
+
+    # Test scaling
+    x = randn(Float32, 5, 5)
+    y = randn(Float32, 5, 5)
+    attr = OneDNN.Attributes()
+    OneDNN.setscale!(attr, 2)
+    z = OneDNN.matmul(y, x; attributes = attr)
+
+    @test isapprox(OneDNN.materialize(z), 2 * x * y)
 end

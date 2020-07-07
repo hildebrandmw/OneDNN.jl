@@ -8,7 +8,7 @@ out_eltype(::Type{T}...) where {T} = T
 out_eltype(x...) = error("Different Eltypes! $(typeof.(x))")
 
 # Switch order to account for column major to row-major ordering.
-matmul(x...; kw...) = matmul(memory.(x)...; kw...)
+matmul(a, b; kw...) = matmul(memory(a), memory(b); kw...)
 function matmul(a::Memory, b::Memory; kw...)
     # Compute the size of the destinaion.
     dst_dims = matmul_dst_dims(size(a), size(b))

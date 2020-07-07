@@ -334,11 +334,9 @@ end
 materialize(x::Memory{T,N,<:SubArray{T,N}}) where {T,N} = x.array
 
 #####
-##### Zygote Compatibility
+##### Zygote compatibility
 #####
 
-# For not, just fallback to Julia addition.
-function Zygote.accum(x::Memory, y::AbstractArray)
-    @time out = memory(copy(materialize(x)) .+ copy(materialize(y)))
-    return out
-end
+Zygote.accum(a::Memory, b::Memory) = binary(+, a, b)
+Zygote.accum(a::Memory, b::AbstractArray) = binary(+, a, memory(b))
+Zygote.accum(a::AbstractArray, b::Memory) = binary(+, memory(a), b)
