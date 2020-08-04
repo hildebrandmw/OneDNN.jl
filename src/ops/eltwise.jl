@@ -1,8 +1,76 @@
-# Element wise ops.
+#####
+##### Forward Prop
+#####
 
-#function eltwise(kind, src, algo, alpha, beta)
-#    src = memory(src)
-#end
+function eltwise(src::Memory, kind; kw...)
+    dst = similar(src)
+    return eltwise!(dst, src, kind; kw...)
+end
+
+function eltwise!(
+        dst::Memory,
+        src::Memory,
+        kind;
+        alpha = one(Float32),
+        beta = zero(Float32)
+    )
+
+    # op descriptor
+    #
+    # NOTE: According to the documentation, there is no difference between inference and
+    # training for eltwise ops.
+    #
+    # Thus, always pass inference I guess.
+    op_desc = Ref{Lib.dnnl_eltwise_desc_t}()
+    @apicall Lib.dnnl_eltwise_forward_desc_init(
+        op_desc,
+        Lib.dnnl_forward_inference,
+        kind,
+        memorydesc_ptr(src),
+        alpha,
+        beta,
+    )
+
+    # primitive descriptor
+    primitive_desc = primitive_descriptor(
+        op_desc,
+        Ptr{Nothing}(),
+        global_engine(),
+        Ptr{Nothing}(),
+    )
+
+    # primitive
+    args = [
+        arg(Lib.DNNL_ARG_DST, dst),
+        arg(Lib.DNNL_ARG_SRC, src),
+    ]
+
+    p = primitive(primitive_desc)
+    execute!(p, args)
+
+    # cleanup
+    destroy(primitive_desc, p)
+    return dst
+end
+
+#####
+##### APi
+#####
+
+# Linear
+# Specify α and β as `Number` to avoid ambiguitiy with the `linear` ML layer.
+function linear(x, α::Number = one(Float32), β::Number = zero(Float32))
+    return eltwise(memory(x), Lib.dnnl_eltwise_linear; alpha = α, beta = β)
+end
+
+function linear!(y, x, α::Number = one(Float32), β::Number = zero(Float32))
+    return eltwise!(memory(y), memory(x), Lib.dnnl_eltwise_linear; alpha = α, beta = β)
+end
+
+function linear!(x, α::Number = one(Float32), β::Number = zero(Float32))
+    y = memory(x)
+    return eltwise!(y, y, Lib.dnnl_eltwise_linear; alpha = α, beta = β)
+end
 
 #####
 ##### Compatibility layer from Julia eltwise functions to OneDNN eltwise functions

@@ -1,6 +1,12 @@
 # OneDNN
 
+# Eltwise
+
+
+
 ## Submemory and Julia Views
+
+**NOTE**: This is outdated now.
 
 Getting OneDNN `sub_memory_desc` and Julia views to cooperate is kind of a pain.
 My general approach is that a `Memory` can be constructed from a Julia `SubArray` as long as

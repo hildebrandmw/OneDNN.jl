@@ -52,4 +52,15 @@ end
 global_engine() = GLOBAL_ENGINE[].handle
 global_stream() = GLOBAL_STREAM[].handle
 
+#####
+##### Flux compat
+#####
+
+# Apply the negative here so we can just add together in `update!`.
+# This is because it appears that OneDNN is lacking a binary `-`
+Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
+
+# Expect `Memory` objects to already be negated from the `apply!` step.
+Flux.Optimise.update!(x::Memory, Δ::Memory) = binary!(+, x, Δ)
+
 end # module

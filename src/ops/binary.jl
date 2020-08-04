@@ -21,8 +21,6 @@ Base.broadcasted(::typeof(*), a::Memory, b::Memory) = binary(*, a, b)
 Base.broadcasted(::typeof(min), a::Memory, b::Memory) = binary(min, a, b)
 Base.broadcasted(::typeof(max), a::Memory, b::Memory) = binary(max, a, b)
 
-
-
 #####
 ##### implementation
 #####
@@ -67,4 +65,34 @@ function binary(f::F, src0::Memory, src1::Memory) where {F}
     # cleanup
     destroy(p, pd)
     return dst
+end
+
+# inplace binary - update src0
+function binary!(f::F, src0::Memory, src1::Memory) where {F}
+    # op descriptor
+    op_desc = Ref{Lib.dnnl_binary_desc_t}()
+    @apicall Lib.dnnl_binary_desc_init(
+        op_desc,
+        binary_algkind(f),
+        memorydesc_ptr(src0),
+        memorydesc_ptr(src1),
+        memorydesc_ptr(src0),
+    )
+
+    # primitive descriptor
+    pd = primitive_descriptor(op_desc, Ptr{Nothing}(), global_engine(), Ptr{Nothing}())
+
+    # primitive
+    args = [
+        arg(Lib.DNNL_ARG_SRC_0, src0),
+        arg(Lib.DNNL_ARG_SRC_1, src1),
+        arg(Lib.DNNL_ARG_DST, src0),
+    ]
+
+    p = primitive(pd)
+    execute!(p, args)
+
+    # cleanup
+    destroy(p, pd)
+    return src0
 end
