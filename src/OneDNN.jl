@@ -61,6 +61,8 @@ global_stream() = GLOBAL_STREAM[].handle
 Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
 
 # Expect `Memory` objects to already be negated from the `apply!` step.
-Flux.Optimise.update!(x::Memory, Δ::Memory) = binary!(+, x, Δ)
+function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+    return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
+end
 
 end # module
