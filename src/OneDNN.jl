@@ -56,13 +56,25 @@ global_stream() = GLOBAL_STREAM[].handle
 ##### Flux compat
 #####
 
-# Apply the negative here so we can just add together in `update!`.
-# This is because it appears that OneDNN is lacking a binary `-`
-Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
-
-# Expect `Memory` objects to already be negated from the `apply!` step.
+# TODO: Turns out that updating is better parallelized across the layer dimension than the
+# within each parameter itself
 function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-    return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
+    # Make sure both objects have the same memory layout.
+    if memorydesc(x) != memorydesc(Δ)
+        error("Cannot update Memories with different descriptions")
+    end
+
+    x.array .= x.array .- (o.eta .* Δ.array)
+    return nothing
 end
+
+# # Apply the negative here so we can just add together in `update!`.
+# # This is because it appears that OneDNN is lacking a binary `-`
+# Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
+#
+# # Expect `Memory` objects to already be negated from the `apply!` step.
+# function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+#     return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
+# end
 
 end # module
