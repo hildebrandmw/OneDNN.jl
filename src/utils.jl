@@ -1,63 +1,312 @@
+# Expected Transformation
+#
+# [Lib.]dnnl_f(a,b,c) -> Lib.dnnl_f(dnnl_convert(a), dnnl_convert(b), dnnl_convert(c))
+#
+# Pretty straightforward.
+#
+# If it becomes relevant, I've left code in that will do the transformation
+#
+# [Lib.]f(a,b,c) ->
+#    #genysym1 = dnnl_convert(a)
+#    #genysym2 = dnnl_convert(b)
+#    #genysym2 = dnnl_convert(c)
+#    GC.@preserve #gensym1 #gensym2 @gensym3 begin
+#       Lib.f(#gensym1, #gensym2, @gensym3)
+#    end
 macro apicall(expr)
     if expr.head != :call
-        error("@apicall needs to be a function call")
+        error("Only call `@apicall` on function calls")
     end
 
-    # The transformation is pretty simple.
-    # We just grab the return value and compare it with the Enum values that the C-API
-    # returns.
-    #
-    # If it's anything other than "success", then we throw an error :D
-    return quote
-        ret = $(esc(expr))
-        if ret != Lib.dnnl_success
-            error("DNNL Failure: $ret")
+    # Prefix "Lib." in front of the function call.
+    # However, sometimes the function to call is passed as a higher order function.
+    # Thus, we only implicitly attach "Lib" is the function name starts with "dnnl".
+    fname = expr.args[1]
+    if isa(fname, Symbol)
+        if startswith(string(fname), "dnnl")
+            fname = :(Lib.$fname)
+        else
+            fname = :($(esc(fname)))
         end
-        ret
+    end
+
+    # Escape and convert each of the arguments.
+    args = expr.args[2:end]
+    for i in eachindex(args)
+        # Handle splats.
+        arg = args[i]
+        if isa(arg, Expr) && arg.head == :...
+            args[i] = :(_dnnl_convert($(esc(arg.args[1]))...)...)
+        else
+            args[i] = :(dnnl_convert($(esc(args[i]))))
+        end
+    end
+
+    return quote
+        status = $fname($(args...))
+        if status != Lib.dnnl_success
+            error("DNNL Failure: $status")
+        end
+        status
     end
 end
 
 #####
-##### Global Stuff
+##### Runtime Arguments
 #####
 
-toarg(x) = x
-arg(x...) = Lib.dnnl_exec_arg_t(toarg.(x)...)
+# In general, we want there to have a static length.
+# However, for primitives like Concat that may have many args, using a Vector makes more
+# sense.
+struct Arguments{
+    T<:Union{NTuple{<:Any,Lib.dnnl_exec_arg_t},AbstractVector{Lib.dnnl_exec_arg_t}}
+}
+    args::T
+end
+Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
 
-# Should only need to create one engine and stream and hold onto these as "singletons"
+Base.length(a::Arguments) = length(a.args)
 
-# Construct an execution engine.
+function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:NTuple})
+    return Base.cconvert(Ptr{Lib.dnnl_exec_arg_t}, Ref(x.args))
+end
+
+function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:AbstractVector})
+    return Base.cconvert(Ptr{Lib.dnnl_exec_arg_t}, x.args)
+end
+
+Base.resize!(x::Arguments{<:AbstractVector}, i) = resize!(x.args, i)
+Base.setindex!(x::Arguments{<:AbstractVector}, v, i::Integer) = setindex!(x.args, v, i)
+Base.lastindex(x::Arguments) = lastindex(x.args)
+
+dnnl_arg(x, y) = Lib.dnnl_exec_arg_t(x, dnnl_exec_arg(y))
+function dnnl_exec_arg end
+
+# In the macro below, add support for converting expressions like `:(a.b)` to just
+# plain `b`
+getsym(x::Symbol) = string(x)
+getsym(x::QuoteNode) = getsym(x.value)
+getsym(x::Expr) = getsym(last(x.args))
+
+macro dnnl_args(syms...)
+    exprs = map(syms) do sym
+        dnnl_arg_enum = Symbol("DNNL_ARG_$(uppercase(getsym(sym)))")
+        return :(dnnl_arg(Lib.$dnnl_arg_enum, $(esc(sym))))
+    end
+    return :(Arguments($(exprs...)))
+end
+
+# Default implementation
+dnnl_convert(x) = x
+_dnnl_convert(x, y...) = (dnnl_convert(x), _dnnl_convert(y...)...)
+_dnnl_convert(x) = (dnnl_convert(x),)
+
+const MaybeRef{T} = Union{T,Ref{<:T}}
+wrap_ref(x::Ref) = x
+wrap_ref(x) = Ref(x)
+unwrap_ref(x::Ref) = x[]
+unwrap_ref(x) = x
+
+# Convenience for "noattributes".
+noattributes() = Ptr{Lib.dnnl_primitive_attr}()
+# No corresponding forward propagation primitive.
+noforward() = Ptr{Lib.dnnl_primitive_desc}()
+
+#####
+##### Engine
+#####
+
 mutable struct Engine
     handle::Lib.dnnl_engine_t
+    Engine() = new(Lib.dnnl_engine_t())
+end
 
-    # Inner constructor
-    function Engine(kind::Lib.dnnl_engine_kind_t, index = 0)
-        handle = Ref(Lib.dnnl_engine_t())
-        @apicall Lib.dnnl_engine_create(handle, kind, index)
-        engine = new(handle[])
+function Engine(kind::Lib.dnnl_engine_kind_t, index = 0)
+    engine = Engine()
+    @apicall Lib.dnnl_engine_create(engine, kind, index)
+    attach_finalizer!(engine)
+    return engine
+end
 
-        # Cleanup when destroyed
-        finalizer(engine) do x
-            Lib.dnnl_engine_destroy(x.handle)
-        end
-        return engine
+function attach_finalizer!(engine::Engine)
+    finalizer(engine) do x
+        Lib.dnnl_engine_destroy(x)
     end
 end
 
-# Execution Stream to run on an engine.
+Base.cconvert(::Type{Lib.dnnl_engine_t}, engine::Engine) = engine.handle
+function Base.cconvert(::Type{Ptr{Lib.dnnl_engine_t}}, engine::Engine)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_engine_t}, Base.pointer_from_objref(engine))
+end
+
+#####
+##### Stream
+#####
+
 mutable struct Stream
     handle::Lib.dnnl_stream_t
+    Stream() = new(Lib.dnnl_stream_t())
+end
 
-    function Stream(engine::Engine)
-        handle = Ref(Lib.dnnl_stream_t())
-        @apicall Lib.dnnl_stream_create(handle, engine.handle, Lib.dnnl_stream_default_flags)
-        stream = new(handle[])
+function Stream(engine::Engine)
+    stream = Stream()
+    @apicall Lib.dnnl_stream_create(stream, engine, Lib.dnnl_stream_default_flags)
+    attach_finalizer!(stream)
+    return stream
+end
 
-        # Cleanup when destroyed
-        finalizer(stream) do x
-            Lib.dnnl_stream_destroy(x.handle)
-        end
-
-        return stream
+function attach_finalizer!(stream::Stream)
+    finalizer(stream) do x
+        Lib.dnnl_stream_destroy(x)
     end
 end
+
+Base.cconvert(::Type{Lib.dnnl_stream_t}, stream::Stream) = stream.handle
+function Base.cconvert(::Type{Ptr{Lib.dnnl_stream_t}}, stream::Stream)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_stream_t}, Base.pointer_from_objref(stream))
+end
+
+#####
+##### Primitive Descriptor
+#####
+
+# Hook to allow types to be converted into the correct value passing to OneDNN.
+mutable struct PrimitiveDescriptor
+    ptr::Lib.dnnl_primitive_desc_t
+    PrimitiveDescriptor() = new(Lib.dnnl_primitive_desc_t())
+end
+
+function attach_finalizer!(desc::PrimitiveDescriptor)
+    finalizer(desc) do x
+        @apicall dnnl_primitive_desc_destroy(x)
+    end
+end
+
+Base.cconvert(::Type{Lib.dnnl_primitive_desc_t}, x::PrimitiveDescriptor) = x.ptr
+function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_desc_t}}, x::PrimitiveDescriptor)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_desc_t}, Base.pointer_from_objref(x))
+end
+
+# Many primitives just use `Lib.dnnl_primitive_desc_create`, so we apply that as a default
+# creation function.
+#
+# However, many others, (like convolution, matrix multiplication, etc) have their own
+# primitive descriptor creation functions.
+#
+# So, we allow the primitive creation function to be passed as well.
+function PrimitiveDescriptor(args...)
+    return PrimitiveDescriptor(Lib.dnnl_primitive_desc_create, args...)
+end
+
+function PrimitiveDescriptor(f::F, args...) where {F<:Function}
+    descriptor = PrimitiveDescriptor()
+    @apicall f(descriptor, args...)
+    attach_finalizer!(descriptor)
+    return descriptor
+end
+
+function query_md(descriptor::PrimitiveDescriptor, kind, index = 0)
+    # TODO: Do we need to perform a null check here?
+    ptr = Lib.dnnl_primitive_desc_query_md(descriptor, kind, index)
+    return unsafe_load(ptr)
+end
+
+#####
+##### Primitive
+#####
+
+mutable struct Primitive
+    ptr::Lib.dnnl_primitive_t
+    Primitive() = new(Lib.dnnl_primitive_t())
+end
+
+function attach_finalizer!(primitive::Primitive)
+    finalizer(primitive) do x
+        @apicall dnnl_primitive_destroy(x)
+    end
+end
+
+Base.cconvert(::Type{Lib.dnnl_primitive_t}, x::Primitive) = x.ptr
+function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_t}}, x::Primitive)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_t}, Base.pointer_from_objref(x))
+end
+
+function Primitive(descriptor::PrimitiveDescriptor)
+    primitive = Primitive()
+    @apicall dnnl_primitive_create(primitive, descriptor)
+    attach_finalizer!(primitive)
+    return primitive
+end
+
+function execute!(primitive::Primitive, args; wait = true)
+    @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
+    wait && @apicall(dnnl_stream_wait(global_stream()))
+    return nothing
+end
+
+#####
+##### Attributes and Post Ops
+#####
+
+# Attributes
+mutable struct Attributes
+    ptr::Lib.dnnl_primitive_attr_t
+
+    # inner constructor to ensure a finalizer is attached.
+    function Attributes()
+        val = new(Lib.dnnl_primitive_attr_t)
+        @apicall dnnl_primitive_attr_create(val)
+        attach_finalizer(val)
+        return val
+    end
+end
+
+function attach_finalizer!(attributes::Attributes)
+    finalizer(attributes) do x
+        @apicall dnnl_primitive_attr_destroy(x)
+    end
+end
+
+Base.cconvert(::Type{Lib.dnnl_primitive_attr_t}, x::Attributes) = x.ptr
+function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_attr_t}}, x::Attributes)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_attr_t}, Base.pointer_from_objref(x))
+end
+
+# PostOps
+mutable struct PostOps
+    ptr::Lib.dnnl_post_ops_t
+
+    # Inner constructor to ensure a finalizer is attached.
+    function PostOps()
+        val = new(Lib.dnnl_post_ops_t)
+        @apicall dnnl_post_ops_create(val)
+        attach_finalizer!(val)
+        return val
+    end
+end
+
+function attach_finalizer!(postops::PostOps)
+    finalizer(postops) do x
+        @apicall dnnl_post_ops_destroy(x)
+    end
+end
+
+Base.cconvert(::Type{Lib.dnnl_post_ops_t}, x::PostOps) = x.ptr
+function Base.cconvert(::Type{Ptr{Lib.dnnl_post_ops_t}}, x::PostOps)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_post_ops_t}, Base.pointer_from_objref(x))
+end
+
+function eltwise!(postops::PostOps, f::F, scale = 1) where {F}
+    @apicall dnnl_post_ops_append_eltwise(postops, scale, forward_expand(f)...)
+    return nothing
+end
+
+# Specialize identity to do nothing
+eltwise!(postops::PostOps, ::typeof(identity), scale = 1) = nothing
+
+# Attach Post Ops to Attributes
+function Base.append!(a::Attributes, p::PostOps)
+    @apicall Lib.dnnl_primitive_attr_set_post_ops(a, p)
+end
+
+appendsum!(p::PostOps, scale = 1) = @apicall dnnl_post_ops_append_sum(p, scale)

@@ -1,131 +1,156 @@
-#####
-##### Forward Prop
-#####
-
-function eltwise(src::Memory, kind; kw...)
-    dst = similar(src)
-    return eltwise!(dst, src, kind; kw...)
+struct Eltwise{F}
+    primitive::Primitive
+    output_description::MemoryDesc
+    # Keep track of some construction parameters to allow for introspection.
+    kind::Lib.dnnl_alg_kind_t
+    alpha::Float32
+    beta::Float32
 end
 
-function eltwise!(
-        dst::Memory,
-        src::Memory,
-        kind;
-        alpha = one(Float32),
-        beta = zero(Float32)
+Eltwise(f::F, src::MemoryOrDesc) where {F} = Eltwise(src, forward_expand(f)...)
+# Note: formatter messes up this call.
+#! format: off
+function Eltwise(
+    src::MemoryOrDesc,
+    kind::Lib.dnnl_alg_kind_t,
+    alpha = one(Float32),
+    beta = zero(Float32)
+)
+#! format: on
+    op_descriptor = Ref{Lib.dnnl_eltwise_desc_t}()
+
+    # Note: no difference between training and inference for eltwise ops.
+    @apicall dnnl_eltwise_forward_desc_init(
+        op_descriptor, Lib.dnnl_forward_inference, kind, src, alpha, beta
     )
 
-    # op descriptor
-    #
-    # NOTE: According to the documentation, there is no difference between inference and
-    # training for eltwise ops.
-    #
-    # Thus, always pass inference I guess.
-    op_desc = Ref{Lib.dnnl_eltwise_desc_t}()
-    @apicall Lib.dnnl_eltwise_forward_desc_init(
-        op_desc,
-        Lib.dnnl_forward_inference,
-        kind,
-        memorydesc_ptr(src),
-        alpha,
-        beta,
+    primitive_descriptor = PrimitiveDescriptor(
+        op_descriptor, noattributes(), global_engine(), noforward()
     )
 
-    # primitive descriptor
-    primitive_desc = primitive_descriptor(
-        op_desc,
-        Ptr{Nothing}(),
-        global_engine(),
-        Ptr{Nothing}(),
-    )
+    primitive = Primitive(primitive_descriptor)
+    return Eltwise{layout(src)}(primitive, memorydesc(src), kind, alpha, beta)
+end
 
-    # primitive
-    args = [
-        arg(Lib.DNNL_ARG_DST, dst),
-        arg(Lib.DNNL_ARG_SRC, src),
-    ]
+function (op::Eltwise{F})(src::Memory{F}) where {F}
+    dst = similar(src, eltype(src), size(src), op.output_description, Val(F))
+    return op(dst, src)
+end
 
-    p = primitive(primitive_desc)
-    execute!(p, args)
-
-    # cleanup
-    destroy(primitive_desc, p)
+function (op::Eltwise{F})(dst::Memory{F}, src::Memory{F}) where {F}
+    args = @dnnl_args dst src
+    execute!(op.primitive, args)
     return dst
 end
 
 #####
-##### APi
+##### Backward Eltwise
 #####
 
-# Linear
-# Specify α and β as `Number` to avoid ambiguitiy with the `linear` ML layer.
-function linear(x, α::Number = one(Float32), β::Number = zero(Float32))
-    return eltwise(memory(x), Lib.dnnl_eltwise_linear; alpha = α, beta = β)
+# OneDNN supports two kinds of element-wise backprop modes.
+# One where the source (src) and destination difference (dst_diff) are used, and
+# one where only the destination difference (dst_diff) is used.
+#
+# The type parameter `T` represents the layout for all tensors involved
+# (OneDNN recommends this for best performance)
+#
+# The type parameter `B` is `true` if the destination tensor is used. Otherwise,
+# the source densor is used.
+struct EltwiseBackward{T,B}
+    primitive::Primitive
+    output_description::MemoryDesc
+    # Keep track of some construction parameters to allow for introspection.
+    kind::Lib.dnnl_alg_kind_t
+    alpha::Float32
+    beta::Float32
 end
 
-function linear!(y, x, α::Number = one(Float32), β::Number = zero(Float32))
-    return eltwise!(memory(y), memory(x), Lib.dnnl_eltwise_linear; alpha = α, beta = β)
+function EltwiseBackward(f::F, diff_data::MemoryOrDesc, data::MemoryOrDesc) where {F}
+    return EltwiseBackward(diff_data, data, backward_expand(f)...)
 end
 
-function linear!(x, α::Number = one(Float32), β::Number = zero(Float32))
-    y = memory(x)
-    return eltwise!(y, y, Lib.dnnl_eltwise_linear; alpha = α, beta = β)
-end
+# Note: formatter messes up this call.
+function EltwiseBackward(
+    diff_data::MemoryOrDesc,
+    data::MemoryOrDesc,
+    kind::Lib.dnnl_alg_kind_t,
+    alpha = one(Float32),
+    beta = zero(Float32),
+    use_dst = false,
+)
+    op_descriptor = Ref{Lib.dnnl_eltwise_desc_t}()
 
-#####
-##### Compatibility layer from Julia eltwise functions to OneDNN eltwise functions
-#####
-
-algkind(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu, zero(Float32), zero(Float32))
-algkind(::typeof(Flux.sigmoid)) = (Lib.dnnl_eltwise_logistic, zero(Float32), zero(Float32))
-
-algkind_back_dst(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu_use_dst_for_bwd, zero(Float32), zero(Float32))
-algkind_back_dst(::typeof(Flux.sigmoid)) = (Lib.dnnl_eltwise_logistic_use_dst_for_bwd, zero(Float32), zero(Float32))
-
-# Can the backprop for this function be computed from the dst tensor?
-# If so, we can fuse this on the forward pass.
-back_from_dst(::Any) = false
-back_from_dst(::typeof(Flux.relu)) = true
-back_from_dst(::typeof(Flux.sigmoid)) = true
-back_from_dst(::typeof(identity)) = true
-
-#####
-##### Backprop
-#####
-
-backprop_eltwise_dst(f, dst, Δ) = backprop_eltwise_dst(f, memory(dst), memory(Δ))
-function backprop_eltwise_dst(f, dst::Memory, diff_dst::Memory)
-    diff_src = similar(dst)
-
-    # op descriptor
-    opd = Ref{Lib.dnnl_eltwise_desc_t}()
-    kind, alpha, beta = algkind_back_dst(f)
-    @apicall Lib.dnnl_eltwise_backward_desc_init(
-        opd,
-        kind,
-        memorydesc_ptr(diff_dst),
-        memorydesc_ptr(dst),
-        alpha,
-        beta,
+    # Note: no difference between training and inference for eltwise ops.
+    @apicall dnnl_eltwise_backward_desc_init(
+        op_descriptor, kind, diff_data, data, alpha, beta
     )
 
-    # primitive descriptor
-    pd = primitive_descriptor(opd, Ptr{Nothing}(), global_engine(), Ptr{Nothing}())
+    primitive_descriptor = PrimitiveDescriptor(
+        op_descriptor, noattributes(), global_engine(), noforward()
+    )
 
-    # primitive
-    args = [
-        arg(Lib.DNNL_ARG_DST, dst),
-        arg(Lib.DNNL_ARG_DIFF_DST, diff_dst),
-        arg(Lib.DNNL_ARG_DIFF_SRC, diff_src),
-    ]
+    primitive = Primitive(primitive_descriptor)
+    T = layout(diff_data)
+    return EltwiseBackward{T,use_dst}(primitive, memorydesc(diff_data), kind, alpha, beta)
+end
 
-    p = primitive(pd)
-    execute!(p, args)
+function (op::EltwiseBackward{T})(diff_dst::Memory{T}, src_or_dst::Memory{T}) where {T}
+    diff_src = similar(
+        diff_dst, eltype(diff_dst), size(diff_dst), op.output_description, Val(T)
+    )
+    return op(diff_src, diff_dst, src_or_dst)
+end
 
-    # cleanup
-    destroy(p, pd)
-
+# Source for backprop
+function (op::EltwiseBackward{DD,false})(
+    diff_src::Memory{DD}, diff_dst::Memory{DD}, src::Memory{S}
+) where {DD,S}
+    args = @dnnl_args diff_src diff_dst src
+    execute!(op.primitive, args)
     return diff_src
 end
 
-backprop_eltwise_dst(::typeof(identity), dst::Memory, diff_dst::Memory) = diff_dst
+# Destination for backprop
+function (op::EltwiseBackward{DD,true})(
+    diff_src::Memory{DD}, diff_dst::Memory{DD}, dst::Memory{S}
+) where {DD,S}
+    args = @dnnl_args diff_src diff_dst dst
+    execute!(op.primitive, args)
+    return diff_src
+end
+
+#####
+##### Convenience Wrappers.
+#####
+
+struct Linear
+    α::Float32
+    β::Float32
+end
+
+forward_expand(::typeof(abs)) = (Lib.dnnl_eltwise_abs, zero(Float32), zero(Float32))
+forward_expand(x::Linear) = (Lib.dnnl_eltwise_linear, x.α, x.β)
+function forward_expand(::typeof(Flux.sigmoid))
+    return (Lib.dnnl_eltwise_logistic, zero(Float32), zero(Float32))
+end
+forward_expand(::typeof(sqrt)) = (Lib.dnnl_eltwise_sqrt, zero(Float32), zero(Float32))
+forward_expand(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu, zero(Float32), zero(Float32))
+
+function backward_expand(::typeof(abs))
+    return (Lib.dnnl_eltwise_abs, zero(Float32), zero(Float32), false)
+end
+backward_expand(x::Linear) = (Lib.dnnl_eltwise_linear, x.α, x.β, false)
+function backward_expand(::typeof(Flux.sigmoid))
+    return (Lib.dnnl_eltwise_logistic_use_dst_for_bwd, zero(Float32), zero(Float32), true)
+end
+function backward_expand(::typeof(sqrt))
+    return (Lib.dnnl_eltwise_sqrt, zero(Float32), zero(Float32), false)
+end
+function backward_expand(::typeof(Flux.relu))
+    return (Lib.dnnl_eltwise_relu_use_dst_for_bwd, zero(Float32), zero(Float32), true)
+end
+
+# Can this elementwise op be fused into a previous operation?
+# Only if the backward op can operate on the destination tensor only.
+canfuse(f::F) where {F} = last(backward_expand(f))
+canfuse(::typeof(identity)) = true

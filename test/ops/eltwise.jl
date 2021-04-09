@@ -4,49 +4,76 @@
     ## Linear
     f = (x, α, β) -> (α .* x) .+ β
     x = rand(Float32, 10, 10)
+    X = OneDNN.Memory(x)
+    op = OneDNN.Eltwise(OneDNN.Linear(1, 2), X)
 
-    # non-mutating
-    Y = OneDNN.linear(x)
-    @test isapprox(OneDNN.materialize(Y), f(x, Float32(1.0), Float32(0.0)))
+    Y = op(X)
+    @test isapprox(Y, f(x, 1, 2))
 
-    Y = OneDNN.linear(x, 2.0, -10.0)
-    @test isapprox(OneDNN.materialize(Y), f(x, 2.0, -10.0))
+    # Try mutating version
+    Y .= zero(eltype(Y))
+    @test all(iszero, Y)
+    op(Y, X)
+    @test isapprox(Y, f(x, 1, 2))
 
-    # mutating
-    X = OneDNN.memory(x)
-    Y = similar(X)
+    # Backprop
+    ff(x) = 0.5 .* x .+ 2
+    y, back = Zygote._pullback(ff, x)
+    z = ones(Float32, size(y))
+    Z = OneDNN.Memory(z)
+    op_back = OneDNN.EltwiseBackward(OneDNN.Linear(0.5, 2), Y, Z)
 
-    OneDNN.linear!(Y, X, -5, 20)
-    @test isapprox(OneDNN.materialize(Y), f(x, -5, 20))
-
-    # inplace - copy `x` because memory will just wrap it otherwise.
-    X = OneDNN.memory(copy(x))
-    OneDNN.linear!(X, -1)
-    @test isapprox(OneDNN.materialize(X), f(x, -1, 0))
+    expected = back(z)[2]
+    result = op_back(Z, X)
+    @test isapprox(result, expected)
 
     #####
-    ##### Backprop
+    ##### Standard Functions
     #####
 
-    # Does backprop work correctly.
-    activation_functions = [
-        identity,
-        Flux.relu,
-        Flux.sigmoid,
-    ]
+    fns = [abs, sqrt]
+    x = rand(Float32, 100, 100)
+    X = OneDNN.Memory(x)
+    for f in fns
+        @show f
+        F(x) = f.(x)
+        y, back = Zygote._pullback(F, x)
 
-    for fn in activation_functions
-        # Use Zygote to generate the pullback
-        f = x -> fn.(x)
+        op_forward = OneDNN.Eltwise(f, X)
+        Y = op_forward(X)
+        @test isapprox(y, Y)
 
-        x = randn(Float32, 10, 10)
+        dy = rand(Float32, size(y))
+        dY = OneDNN.Memory(dy)
+        op_backward = OneDNN.EltwiseBackward(f, dY, Y)
+
+        dX = op_backward(dY, X)
+        dx = back(dy)[2]
+        @test isapprox(dx, dX)
+    end
+
+    #####
+    ##### The `use_bwd_for_dst` functions.
+    #####
+
+    fns = [Flux.relu, Flux.sigmoid]
+    x = rand(Float32, 100, 100)
+    X = OneDNN.Memory(x)
+    for _f in fns
+        @show _f
+        f(x) = _f.(x)
         y, back = Zygote._pullback(f, x)
 
-        # Generate the expected result from Zygote.
-        # Then, use the backwards kernels from OneDNN and check for equality.
-        expected = back(x)[2]
+        op_forward = OneDNN.Eltwise(_f, X)
+        Y = op_forward(X)
+        @test isapprox(y, Y)
 
-        val = OneDNN.materialize(OneDNN.backprop_eltwise_dst(fn, y, x))
-        @test isapprox(expected, val)
+        dy = rand(Float32, size(y))
+        dY = OneDNN.Memory(dy)
+        op_backward = OneDNN.EltwiseBackward(_f, dY, Y)
+
+        dX = op_backward(dY, Y)
+        dx = back(dy)[2]
+        @test isapprox(dx, dX)
     end
 end

@@ -1,6 +1,6 @@
 module Lib
 
-import Libdl
+using Libdl: Libdl
 
 using CEnum
 

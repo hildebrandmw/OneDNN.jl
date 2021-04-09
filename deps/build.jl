@@ -1,9 +1,18 @@
-url = "https://github.com/oneapi-src/oneDNN/releases/download/v1.5/dnnl_lnx_1.5.0_cpu_iomp.tgz"
-localpath = "dnnl.tgz"
+url = """
+https://github.com/oneapi-src/oneDNN/releases/download/v1.5/dnnl_lnx_1.5.0_cpu_gomp.tgz
+"""
 
-download(url, localpath)
-run(`tar -xvf $localpath`)
-mv("dnnl_lnx_1.5.0_cpu_iomp", "dnnl")
+local_tarball = "dnnl.tgz"
+local_dir = "dnnl"
+
+if !ispath(local_tarball)
+    download(url, local_tarball)
+    run(`tar -xvf $localpath`)
+end
+
+if !ispath(local_dir)
+    mv("dnnl_lnx_1.5.0_cpu_gomp", "dnnl")
+end
 
 # #####
 # ##### Debug Build

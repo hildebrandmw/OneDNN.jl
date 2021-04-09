@@ -16,9 +16,7 @@ mkpath(outpath)
 # We're just looking for `dnnl.h` and `dnnl_types.h`.
 const include_dir = joinpath(dirname(@__DIR__), "deps", "dnnl", "include")
 
-const onednn_headers = [
-    joinpath(include_dir, "dnnl.h"),
-]
+const onednn_headers = [joinpath(include_dir, "dnnl.h")]
 
 # Includes for Clang.jl
 #
@@ -33,41 +31,15 @@ function wrap_header(top_hdr::AbstractString, cursor_header::AbstractString)
     return false
 end
 
-const REMOVE_MACROS = [
-    "DNNL_RUNTIME_DIM_VAL",
-    "DNNL_RUNTIME_S32_VAL",
-    "DNNL_MEMORY_NONE",
-]
+const REMOVE_MACROS = ["DNNL_RUNTIME_DIM_VAL", "DNNL_RUNTIME_S32_VAL", "DNNL_MEMORY_NONE"]
 
 function wrap_cursor(cursor_name::AbstractString, cursor)
-    # There's one macro definition we have to snipe.
+    # Snipe macros that don't translate well.
     if isa(cursor, Clang.CLMacroDefinition)
-        # Remove the macros we don't want.
-        if in(cursor_name, REMOVE_MACROS)
-            return false
-        else
-            return true
-        end
+        return !in(cursor_name, REMOVE_MACROS)
     end
     return true
 end
-
-# # Mapping of header files to Julia files
-# function julia_file(header::AbstractString)
-#     src_name = basename(dirname(header))
-#     #if src_name == "sundials"
-#     #    src_name = "libsundials" # avoid having both Sundials.jl and sundials.jl
-#     #end
-#     return joinpath(outpath, string(src_name, ".jl"))
-# end
-# function library_file(header::AbstractString)
-#     header_name = basename(header)
-#     if startswith(header_name, "nvector")
-#         return "libsundials_nvecserial"
-#     else
-#         return string("libsundials_", basename(dirname(header)))
-#     end
-# end
 
 #####
 ##### Context Creation
@@ -86,10 +58,37 @@ context.headers = onednn_headers
 # `dnnl_dims_t` and replace them with `Ptr{dnnl_dim_t}`.
 
 wrap_onednn_api(notexpr) = Any[notexpr]
-
 function wrap_onednn_api(expr::Expr)
-    # Check if this is aa ccall
-    if expr.head == :function
+    if expr.head == :const
+        # Replace objects that Clang turns into "Cvoid" into singleton structs.
+        # This provides a bit more type-safety when calling the C API.
+        # Also need to make "unsafe_convert" an error to avoid pointers swapping types
+        # accidentally.
+        if MacroTools.@capture(expr, const name_ = Cvoid)
+            expr = quote
+                struct $name end
+
+                function Base.cconvert(::Type{Ptr{$name}}, x::Ptr{$name})
+                    return x
+                end
+                function Base.cconvert(::Type{Ptr{$name}}, x::Ptr)
+                    return error("Refusing to convert $(typeof(x)) to a Ptr{$($name)}!")
+                end
+
+                function Base.cconvert(::Type{Ptr{Ptr{$name}}}, x::Ptr{Ptr{$name}})
+                    return x
+                end
+                function Base.cconvert(::Type{Ptr{Ptr{$name}}}, x::Ptr)
+                    return error("Refusing to convert $(typeof(x)) to a Ptr{Ptr{$($name)}}!")
+                end
+            end
+            # Remove line number nodes
+            expr = MacroTools.prewalk(MacroTools.rmlines, expr)
+            return [expr]
+        end
+
+        # Check if this is a ccall
+    elseif expr.head == :function
         # Handle special cases.
         #
         # For some reason, the argument to this method is not captured.
@@ -97,9 +96,16 @@ function wrap_onednn_api(expr::Expr)
         if expr.args[1].args[1] == :dnnl_memory_desc_get_size
             expr = :(
                 function dnnl_memory_desc_get_size(memory_desc)
-                    ccall((:dnnl_memory_desc_get_size, dnnl), Csize_t, (Ptr{dnnl_memory_desc_t},), memory_desc)
+                    return ccall(
+                        (:dnnl_memory_desc_get_size, dnnl),
+                        Csize_t,
+                        (Ptr{dnnl_memory_desc_t},),
+                        memory_desc,
+                    )
                 end
             )
+            # Remove line number nodes
+            expr = MacroTools.prewalk(MacroTools.rmlines, expr)
             return [expr]
         end
 
@@ -116,7 +122,7 @@ function wrap_onednn_api(expr::Expr)
     return [expr]
 end
 
-context.rewriter = function(exprs)
+context.rewriter = function (exprs)
     mod_exprs = sizehint!(Vector{Any}(), length(exprs))
     for expr in exprs
         append!(mod_exprs, wrap_onednn_api(expr))
@@ -127,4 +133,3 @@ end
 @info("Generating .jl wrappers for OneDNN in $outpath...")
 run(context)
 @info("Done generating .jl wrappers for OneDNN in $outpath")
-

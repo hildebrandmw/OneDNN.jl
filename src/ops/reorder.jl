@@ -1,44 +1,39 @@
-# Restrict inputs to just `Memory` types.
-# Default the output format to normal Julia column-major format
-function reorder(
-        src::Memory,
-        format::Lib.dnnl_format_tag_t = dnnl_format(val_ndims(src))
-    )
+"""
+    Reorder{A,B}
 
-    # Construct the destination object
-    dst_desc = memorydesc(eltype(src), size(src), format)
-    return reorder(src, dst_desc)
+Reorder memory objets from layout A to layout B.
+"""
+struct Reorder{A,B}
+    primitive::Primitive
+    # Track the size and memory description for the destination to allow allocation of
+    # destination if it's not provided.
+    output_description::MemoryDesc
 end
 
-reorder(src::Memory, desc::Ptr{MemoryDesc}) = reorder(src, unsafe_load(desc))
-function reorder(src::Memory, desc::MemoryDesc)
-    dst = similar(src, eltype(src), size(src), desc)
-    reorder!(dst, src)
-    return dst
-end
+const MaybeReorder = Union{Nothing,Reorder}
 
-function reorder!(dst::Memory, src::Memory)
-    # primitive descriptor
-    pd = primitive_descriptor(
+function Reorder(dst::MemoryOrDesc, src::MemoryOrDesc; attributes = noattributes())
+    descriptor = PrimitiveDescriptor(
         Lib.dnnl_reorder_primitive_desc_create,
         src,
         global_engine(),
         dst,
         global_engine(),
-        Ptr{Nothing}(),
+        attributes,
     )
-
-    # primitive
-    args = [
-        arg(Lib.DNNL_ARG_FROM, src),
-        arg(Lib.DNNL_ARG_TO, dst),
-    ]
-
-    p = primitive(pd)
-    execute!(p, args)
-
-    # cleanup
-    destroy(p, pd)
-    return nothing
+    primitive = Primitive(descriptor)
+    return Reorder{layout(dst),layout(src)}(primitive, memorydesc(dst))
 end
 
+# Allocating Version
+function (op::Reorder{A,B})(src::Memory{B}) where {A,B}
+    dst = similar(src, eltype(src), size(src), op.output_description, Val(A))
+    return op(dst, src)
+end
+
+# Inplace version
+function (op::Reorder{A,B})(to::Memory{A}, from::Memory{B}) where {A,B}
+    args = @dnnl_args to from
+    execute!(op.primitive, args)
+    return to
+end

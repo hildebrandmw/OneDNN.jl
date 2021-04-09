@@ -1,98 +1,40 @@
-#####
-##### forwards
-#####
+struct Binary{O,A,B}
+    primitive::Primitive
+    output_description::MemoryDesc
+end
 
-binary_algkind(::typeof(+)) = Lib.dnnl_binary_add
-binary_algkind(::typeof(*)) = Lib.dnnl_binary_mul
-binary_algkind(::typeof(max)) = Lib.dnnl_binary_max
-binary_algkind(::typeof(min)) = Lib.dnnl_binary_min
+Binary(f::F, a::MemoryOrDesc, b::MemoryOrDesc) where {F} = Binary(a, b, binary_forward(f))
+function Binary(a::MemoryOrDesc, b::MemoryOrDesc, kind)
+    desc_any = memorydesc(eltype(a), size(a), dnnl_format_any())
+    op_desc = Ref{Lib.dnnl_binary_desc_t}()
+    @apicall dnnl_binary_desc_init(op_desc, kind, a, b, desc_any)
 
-# operator overloading
-Base.:+(a::Memory, b::Memory) = binary(+, a, b)
-Base.:*(a::Memory, b::Memory) = binary(*, a, b)
-Base.max(a::Memory, b::Memory) = binary(max, a, b)
-Base.min(a::Memory, b::Memory) = binary(min, a, b)
-
-# hijack broadcasting as well
-Base.broadcasted(::typeof(+), a::Memory, b::Memory) = binary(+, a, b)
-Base.broadcasted(::typeof(+), a::Memory, b::AbstractArray) = binary(+, a, memory(b))
-
-Base.broadcasted(::typeof(*), a::Memory, b::Memory) = binary(*, a, b)
-Base.broadcasted(::typeof(min), a::Memory, b::Memory) = binary(min, a, b)
-Base.broadcasted(::typeof(max), a::Memory, b::Memory) = binary(max, a, b)
-
-#####
-##### implementation
-#####
-
-binary(f::F, src0, src1) where {F} = binary(f, memory(src0), memory(src1))
-function binary(f::F, src0::Memory, src1::Memory) where {F}
-    # Construct a destination descriptor based on the source
-    dst_desc_temp = memorydesc(eltype(src0), size(src0), dnnl_format_any())
-
-    # op descriptor
-    od = Ref{Lib.dnnl_binary_desc_t}()
-    @apicall Lib.dnnl_binary_desc_init(
-        od,
-        binary_algkind(f),
-        memorydesc_ptr(src0),
-        memorydesc_ptr(src1),
-        Ref(dst_desc_temp),
+    # Create the primitive descriptor
+    primitive_descriptor = PrimitiveDescriptor(
+        op_desc, noattributes(), global_engine(), noforward()
     )
 
-    # primitive descriptor
-    pd = primitive_descriptor(
-        od,
-        Ptr{Nothing}(),
-        global_engine(),
-        Ptr{Nothing}()
-    )
+    primitive = Primitive(primitive_descriptor)
 
-    # query pd for output format.
-    dst_desc = Lib.dnnl_primitive_desc_query_md(pd, Lib.dnnl_query_dst_md, 0)
-    dst = similar(src0, eltype(src0), size(src0), unsafe_load(dst_desc))
+    # Get the output format.
+    desc = query_md(primitive_descriptor, Lib.dnnl_query_dst_md)
+    return Binary{layout(desc),layout(a),layout(b)}(primitive, desc)
+end
 
-    # primitive
-    args = [
-        arg(Lib.DNNL_ARG_SRC_0, src0),
-        arg(Lib.DNNL_ARG_SRC_1, src1),
-        arg(Lib.DNNL_ARG_DST, dst),
-    ]
+function (op::Binary{O,A,B})(a::Memory{A}, b::Memory{B}) where {O,A,B}
+    o = similar(a, eltype(a), size(a), memorydesc(a), Val(O))
+    return op(o, a, b)
+end
 
-    p = primitive(pd)
-    execute!(p, args)
-
-    # cleanup
-    destroy(p, pd)
+function (op::Binary{O,A,B})(dst::Memory{O}, src_0::Memory{A}, src_1::Memory{B}) where {O,A,B}
+    args = @dnnl_args dst src_0 src_1
+    execute!(op.primitive, args)
     return dst
 end
 
-# inplace binary - update src0
-function binary!(f::F, src0::Memory, src1::Memory) where {F}
-    # op descriptor
-    op_desc = Ref{Lib.dnnl_binary_desc_t}()
-    @apicall Lib.dnnl_binary_desc_init(
-        op_desc,
-        binary_algkind(f),
-        memorydesc_ptr(src0),
-        memorydesc_ptr(src1),
-        memorydesc_ptr(src0),
-    )
-
-    # primitive descriptor
-    pd = primitive_descriptor(op_desc, Ptr{Nothing}(), global_engine(), Ptr{Nothing}())
-
-    # primitive
-    args = [
-        arg(Lib.DNNL_ARG_SRC_0, src0),
-        arg(Lib.DNNL_ARG_SRC_1, src1),
-        arg(Lib.DNNL_ARG_DST, src0),
-    ]
-
-    p = primitive(pd)
-    execute!(p, args)
-
-    # cleanup
-    destroy(p, pd)
-    return src0
-end
+binary_forward(::typeof(+)) = Lib.dnnl_binary_add
+binary_forward(::typeof(*)) = Lib.dnnl_binary_mul
+binary_forward(::typeof(-)) = Lib.dnnl_binary_sub
+binary_forward(::typeof(/)) = Lib.dnnl_binary_div
+binary_forward(::typeof(max)) = Lib.dnnl_binary_max
+binary_forward(::typeof(min)) = Lib.dnnl_binary_min
