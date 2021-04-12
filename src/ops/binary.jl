@@ -26,7 +26,9 @@ function (op::Binary{O,A,B})(a::Memory{A}, b::Memory{B}) where {O,A,B}
     return op(o, a, b)
 end
 
-function (op::Binary{O,A,B})(dst::Memory{O}, src_0::Memory{A}, src_1::Memory{B}) where {O,A,B}
+function (op::Binary{O,A,B})(
+    dst::Memory{O}, src_0::Memory{A}, src_1::Memory{B}
+) where {O,A,B}
     args = @dnnl_args dst src_0 src_1
     execute!(op.primitive, args)
     return dst

@@ -123,14 +123,14 @@ end
 
 function Engine(kind::Lib.dnnl_engine_kind_t, index = 0)
     engine = Engine()
-    @apicall Lib.dnnl_engine_create(engine, kind, index)
+    @apicall dnnl_engine_create(engine, kind, index)
     attach_finalizer!(engine)
     return engine
 end
 
 function attach_finalizer!(engine::Engine)
     finalizer(engine) do x
-        Lib.dnnl_engine_destroy(x)
+        @apicall dnnl_engine_destroy(x)
     end
 end
 
@@ -150,14 +150,14 @@ end
 
 function Stream(engine::Engine)
     stream = Stream()
-    @apicall Lib.dnnl_stream_create(stream, engine, Lib.dnnl_stream_default_flags)
+    @apicall dnnl_stream_create(stream, engine, Lib.dnnl_stream_default_flags)
     attach_finalizer!(stream)
     return stream
 end
 
 function attach_finalizer!(stream::Stream)
     finalizer(stream) do x
-        Lib.dnnl_stream_destroy(x)
+        @apicall dnnl_stream_destroy(x)
     end
 end
 
