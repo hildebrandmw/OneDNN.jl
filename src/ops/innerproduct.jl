@@ -118,14 +118,14 @@ function InnerProductBackwardData(
         op_descriptor, diff_src_desc, weight_desc, diff_dst_desc
     )
 
-    Primitive_descriptor = PrimitiveDescriptor(
+    primitive_descriptor = PrimitiveDescriptor(
         op_descriptor, noattributes(), global_engine(), noforward()
     )
 
     # Check data formats
-    diff_src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_src_diff_md)
-    weight_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_weights_md)
-    diff_dst_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_dst_diff_md)
+    diff_src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_src_md)
+    weights_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_weights_md)
+    diff_dst_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_dst_md)
 
     if memorydesc(diff_dst) != diff_dst_desc_opt
         diff_dst_reorder = Reorder(memorydesc(diff_dst), diff_dst_desc_opt)
@@ -133,22 +133,22 @@ function InnerProductBackwardData(
         diff_dst_reorder = nothing
     end
 
-    if memorydesc(weight) != weight_desc_opt
-        weight_reorder = Reorder(memorydesc(weight), weight_desc_opt)
+    if memorydesc(weight) != weights_desc_opt
+        weights_reorder = Reorder(weights_desc_opt, memorydesc(weight))
     else
-        weight_reorder = nothing
+        weights_reorder = nothing
     end
 
     primitive = Primitive(primitive_descriptor)
 
     # Prepare type parameters
     DS = layout(diff_src_desc_opt)
-    W = layout(weight_desc_opt)
+    W = layout(weights_desc_opt)
     DO = layout(diff_dst_desc_opt)
-    WR = typeof(weight_reorder)
+    WR = typeof(weights_reorder)
     DDR = typeof(diff_dst_reorder)
     return InnerProductBackwardData{DS,W,DO,WR,DDR}(
-        primitive, diff_src_desc_opt, diff_src_dims, weight_reorder, diff_dst_reorder
+        primitive, diff_src_desc_opt, diff_src_size, weights_reorder, diff_dst_reorder
     )
 end
 
@@ -164,7 +164,7 @@ function (op::InnerProductBackwardData{DS,W,DD})(
     diff_src::Memory{DS}, weight::Memory{W_}, diff_dst::Memory{DD_}
 ) where {DS,W,DD,W_,DD_}
     if W != W_
-        weight = op.weight_reorder(weight)
+        weight = op.weights_reorder(weight)
     end
     if DD != DD_
         diff_dst = op.diff_dst_reorder(diff_dst)
@@ -206,17 +206,17 @@ function InnerProductBackwardWeight(
 
     op_descriptor = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_backward_weights_desc_init(
-        op_descriptor, src_desc, diff_weight_desc, diff_bias_desc, diff_dst_desc
+        op_descriptor, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc
     )
 
-    Primitive_descriptor = PrimitiveDescriptor(
+    primitive_descriptor = PrimitiveDescriptor(
         op_descriptor, noattributes(), global_engine(), noforward()
     )
 
     # Check data formats
     src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_src_md)
-    diff_weight_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_weights_diff_md)
-    diff_dst_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_dst_diff_md)
+    diff_weight_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_weights_md)
+    diff_dst_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_dst_md)
 
     if memorydesc(diff_dst) != diff_dst_desc_opt
         diff_dst_reorder = Reorder(memorydesc(diff_dst), diff_dst_desc_opt)
@@ -241,9 +241,9 @@ function InnerProductBackwardWeight(
     return InnerProductBackwardWeight{DW,S,DD,SR,DDR}(
         primitive,
         diff_weight_desc_opt,
-        weight_size,
-        diff_bias_opt,
-        bias_size,
+        diff_weights_size,
+        diff_bias_desc,
+        diff_bias_size,
         src_reorder,
         diff_dst_reorder,
     )

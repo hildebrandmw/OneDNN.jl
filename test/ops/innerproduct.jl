@@ -12,6 +12,55 @@
     op = OneDNN.InnerProduct(src_m, weights_m, bias_m)
     result = op(src_m)
     @test isapprox(expected, transpose(result))
+
+    #####
+    ##### InnerProductBackwardData
+    #####
+
+    m = Flux.Dense(10, 5, identity)
+    weights = m.weight
+    bias = m.bias
+    x = randn(Float32, 10, 10)
+
+    y, back = Zygote._pullback(m, x)
+    dy = randn(Float32, 5, 10)
+    grads = back(dy)
+    dx = dy[2]
+
+    # Grads should be a 2-tuple. The first element is a NamedTuple holding the
+    # gradients for `m`, the seconds should just be a matrix with the gradients for `x`.
+    @test length(grads) == 2
+    dx = grads[2]
+
+    W = OneDNN.Memory(weights)
+    DY = OneDNN.Memory(transpose(dy))
+    op = OneDNN.InnerProductBackwardData(size(transpose(x)), W, DY)
+    DX = op(W, DY)
+    @test isapprox(dx, transpose(DX))
+
+    #####
+    ##### InnerProductBackwardWeights
+    #####
+
+    m = Flux.Dense(10, 5, identity)
+    weights = m.weight
+    bias = m.bias
+    x = randn(Float32, 10, 10)
+
+    y, back = Zygote._pullback(m, x)
+    dy = randn(Float32, 5, 10)
+    grads = back(dy)
+    dw = grads[1].weight
+    db = grads[1].bias
+
+    W = OneDNN.Memory(weights)
+    B = OneDNN.Memory(bias)
+    X = OneDNN.Memory(transpose(x))
+    DY = OneDNN.Memory(transpose(dy))
+    op = OneDNN.InnerProductBackwardWeight(size(weights), length(bias), X, DY)
+    DW, DB = op(X, DY)
+    @test isapprox(dw, DW)
+    @test isapprox(db, DB)
 end
 
 # @testset "Testing Innerproduct" begin

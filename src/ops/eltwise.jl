@@ -63,6 +63,7 @@ struct EltwiseBackward{T,B}
     kind::Lib.dnnl_alg_kind_t
     alpha::Float32
     beta::Float32
+    dst_for_bwd::Bool
 end
 
 function EltwiseBackward(f::F, diff_data::MemoryOrDesc, data::MemoryOrDesc) where {F}
@@ -91,7 +92,9 @@ function EltwiseBackward(
 
     primitive = Primitive(primitive_descriptor)
     T = layout(diff_data)
-    return EltwiseBackward{T,use_dst}(primitive, memorydesc(diff_data), kind, alpha, beta)
+    return EltwiseBackward{T,use_dst}(
+        primitive, memorydesc(diff_data), kind, alpha, beta, use_dst
+    )
 end
 
 function (op::EltwiseBackward{T})(diff_dst::Memory{T}, src_or_dst::Memory{T}) where {T}
@@ -152,5 +155,6 @@ end
 
 # Can this elementwise op be fused into a previous operation?
 # Only if the backward op can operate on the destination tensor only.
-canfuse(f::F) where {F} = last(backward_expand(f))
+dst_for_bwd(f::F) where {F} = last(backward_expand(f))
+canfuse(f::F) where {F} = dst_for_bwd(f)
 canfuse(::typeof(identity)) = true

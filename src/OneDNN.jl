@@ -3,16 +3,15 @@ module OneDNN
 # stdlib
 using LinearAlgebra: LinearAlgebra
 
-# # julia ml
-# import Zygote
-# import Flux
-
+# deps
+using ChainRulesCore: ChainRulesCore
 using Flux: Flux
 using MacroTools: MacroTools
+#using Zygote: Zygote
 
-# time how long some operations take
-using TimerOutputs: TimerOutputs
-const to = TimerOutputs.TimerOutput()
+# # time how long some operations take
+# using TimerOutputs: TimerOutputs
+# const to = TimerOutputs.TimerOutput()
 
 #####
 ##### deps
@@ -33,6 +32,9 @@ include("ops/reorder.jl")
 include("ops/matmul.jl")
 include("ops/concat.jl")
 include("ops/innerproduct.jl")
+
+include("placeholder.jl")
+
 #
 # # tracing
 # include("tracer.jl")

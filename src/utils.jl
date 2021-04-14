@@ -88,6 +88,24 @@ getsym(x::Symbol) = string(x)
 getsym(x::QuoteNode) = getsym(x.value)
 getsym(x::Expr) = getsym(last(x.args))
 
+# General transformation provided by this macro:
+#
+# `@dnnl_args src dst`
+#
+# becomes
+#
+# ```
+# (OneDNN).Arguments(
+#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_SRC, src),
+#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_DST, dst),
+# )
+# ```
+#
+# The argument symbols, (`src` and `dst` in the above example) get converted to
+# `Lib.DNNL_ARG_SRC` and `Lib.DNNL_ARG_DST` respectively.
+#
+# This requires that functions using this macro follow the same naming conventions as the
+# OneDNN C-API, but that's probably good practiced anyways.
 macro dnnl_args(syms...)
     exprs = map(syms) do sym
         dnnl_arg_enum = Symbol("DNNL_ARG_$(uppercase(getsym(sym)))")
@@ -254,9 +272,9 @@ mutable struct Attributes
 
     # inner constructor to ensure a finalizer is attached.
     function Attributes()
-        val = new(Lib.dnnl_primitive_attr_t)
+        val = new(Lib.dnnl_primitive_attr_t())
         @apicall dnnl_primitive_attr_create(val)
-        attach_finalizer(val)
+        attach_finalizer!(val)
         return val
     end
 end
@@ -278,7 +296,7 @@ mutable struct PostOps
 
     # Inner constructor to ensure a finalizer is attached.
     function PostOps()
-        val = new(Lib.dnnl_post_ops_t)
+        val = new(Lib.dnnl_post_ops_t())
         @apicall dnnl_post_ops_create(val)
         attach_finalizer!(val)
         return val
