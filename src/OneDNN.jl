@@ -26,18 +26,12 @@ include("tiled.jl")
 include("memory.jl")
 
 # ops
-include("ops/eltwise.jl")
-include("ops/binary.jl")
-include("ops/reorder.jl")
-include("ops/matmul.jl")
-include("ops/concat.jl")
-include("ops/innerproduct.jl")
+include("ops/simple.jl")
+# include("ops/matmul.jl")
+# include("ops/concat.jl")
+# include("ops/innerproduct.jl")
 
-include("placeholder.jl")
-
-#
-# # tracing
-# include("tracer.jl")
+# include("placeholder.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()

@@ -12,11 +12,12 @@ using Zygote
 include("tiled.jl")
 include("utils.jl")
 include("memory.jl")
+include("ops/simple.jl")
 
-include("ops/eltwise.jl")
-include("ops/binary.jl")
-include("ops/concat.jl")
-include("ops/matmul.jl")
-include("ops/innerproduct.jl")
-
-include("placeholder.jl")
+# include("ops/eltwise.jl")
+# include("ops/binary.jl")
+# include("ops/concat.jl")
+# include("ops/matmul.jl")
+# include("ops/innerproduct.jl")
+#
+# include("placeholder.jl")

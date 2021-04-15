@@ -152,6 +152,14 @@ function _strides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     return cumprod((one(Int), head(dims(valT, size)...)...))
 end
 
+function dimstrides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
+    return applyperm(_strides(valT, size), T)
+end
+
+@inline function applyperm(size::Tuple{Vararg{Int,N}}, perm::Tuple{Vararg{Int,N}}) where {N}
+    return ntuple(i -> size[perm[i]], Val(N))
+end
+
 function fullsize(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     # Constant propagation to the rescue.
     # If the layout is non-blocked, just standard or permuted, then there is no

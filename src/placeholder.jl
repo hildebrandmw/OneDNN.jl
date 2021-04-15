@@ -41,7 +41,6 @@ end
 
 function Placeholder{EltwiseBackward}(f)
     constructor = function EltwiseBackwardConstructor(diff_dst::Memory, src_or_dst::Memory)
-
         return EltwiseBackward(f, diff_dst, src_or_dst)
     end
     return Placeholder(EltwiseBackward, constructor)

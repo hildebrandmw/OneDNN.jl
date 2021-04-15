@@ -120,6 +120,7 @@ _dnnl_convert(x, y...) = (dnnl_convert(x), _dnnl_convert(y...)...)
 _dnnl_convert(x) = (dnnl_convert(x),)
 
 const MaybeRef{T} = Union{T,Ref{<:T}}
+const MaybePtr{T} = Union{T,Ptr{<:T}}
 wrap_ref(x::Ref) = x
 wrap_ref(x) = Ref(x)
 unwrap_ref(x::Ref) = x[]
@@ -194,12 +195,7 @@ mutable struct PrimitiveDescriptor
     PrimitiveDescriptor() = new(Lib.dnnl_primitive_desc_t())
 end
 
-function attach_finalizer!(desc::PrimitiveDescriptor)
-    finalizer(desc) do x
-        @apicall dnnl_primitive_desc_destroy(x)
-    end
-end
-
+destroy(desc::PrimitiveDescriptor) = @apicall dnnl_primitive_desc_destroy(desc)
 Base.cconvert(::Type{Lib.dnnl_primitive_desc_t}, x::PrimitiveDescriptor) = x.ptr
 function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_desc_t}}, x::PrimitiveDescriptor)
     return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_desc_t}, Base.pointer_from_objref(x))
@@ -212,14 +208,23 @@ end
 # primitive descriptor creation functions.
 #
 # So, we allow the primitive creation function to be passed as well.
-function PrimitiveDescriptor(args...)
+function PrimitiveDescriptor(args::Vararg{Any,N}) where {N}
     return PrimitiveDescriptor(Lib.dnnl_primitive_desc_create, args...)
 end
 
-function PrimitiveDescriptor(f::F, args...) where {F<:Function}
+function PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
+    descriptor = __PrimitiveDescriptor(f, args...)
+    finalizer(destroy, descriptor)
+    return descriptor
+end
+
+function __PrimitiveDescriptor(args::Vararg{Any,N}) where {N}
+    return __PrimitiveDescriptor(Lib.dnnl_primitive_desc_create, args...)
+end
+
+function __PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
     descriptor = PrimitiveDescriptor()
     @apicall f(descriptor, args...)
-    attach_finalizer!(descriptor)
     return descriptor
 end
 
@@ -238,21 +243,21 @@ mutable struct Primitive
     Primitive() = new(Lib.dnnl_primitive_t())
 end
 
-function attach_finalizer!(primitive::Primitive)
-    finalizer(primitive) do x
-        @apicall dnnl_primitive_destroy(x)
-    end
-end
-
+destroy(primitive::Primitive) = @apicall dnnl_primitive_destroy(primitive)
 Base.cconvert(::Type{Lib.dnnl_primitive_t}, x::Primitive) = x.ptr
 function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_t}}, x::Primitive)
     return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_t}, Base.pointer_from_objref(x))
 end
 
 function Primitive(descriptor::PrimitiveDescriptor)
+    primitive = __Primitive(descriptor)
+    finalizer(destroy, primitive)
+    return primitive
+end
+
+function __Primitive(descriptor::PrimitiveDescriptor)
     primitive = Primitive()
     @apicall dnnl_primitive_create(primitive, descriptor)
-    attach_finalizer!(primitive)
     return primitive
 end
 
@@ -260,6 +265,15 @@ function execute!(primitive::Primitive, args; wait = true)
     @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
     wait && @apicall(dnnl_stream_wait(global_stream()))
     return nothing
+end
+
+function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
+    desc = __PrimitiveDescriptor(args...)
+    primitive = __Primitive(desc)
+    ret = f(primitive, desc)
+    destroy(primitive)
+    destroy(desc)
+    return ret
 end
 
 #####

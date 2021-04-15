@@ -51,6 +51,7 @@ end
 # Specialize on typed dimensions to make typestable
 logicalsize(md::MemoryDesc) = md.dims[1:(md.ndims)]
 logicalsize(md::MemoryDesc, v::Val) = ntuple(i -> md.dims[i], v)
+Base.strides(md::MemoryDesc, v::Val) = ntuple(i -> md.format_desc.blocking.strides[i], v)
 Base.ndims(md::MemoryDesc) = md.ndims
 
 function Base.show(io::IO, md::MemoryDesc)
@@ -123,10 +124,15 @@ getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
 #####
 
 # Bridge into TiledArrays
-layout(::Array{T,N}) where {T,N} = ntuple(identity, Val(N))
+vlayout(x) = Val(layout(x))
+layout(::Val{N}) where {N} = ntuple(identity, Val(N))
+layout(::Array{T,N}) where {T,N} = layout(Val(N))
 layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 
-# Make mutable so we can finalize the C objects we are holding onto.
+# Often, we don't want to specialize on the layout of the array, instead allowing oneDNN
+# to work on its own
+struct Opaque end
+
 mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
@@ -155,8 +161,13 @@ mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     end
 end
 layout(::Memory{L}) where {L} = L
+layout(x::Opaque) = x
+
 logicalsize(x::Memory) = size(x)
 Base.parent(x::Memory) = x.array
+
+Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x))")
+Base.show(io::IO, ::MIME"text/plain", x::Memory{Opaque}) = show(io, x)
 
 # for creating OneDNN arguments
 Base.cconvert(::Type{Lib.dnnl_memory_t}, x::Memory) = x.memory
@@ -168,22 +179,26 @@ Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::Memory) = memorydesc_ptr(x
 # For constructing DNNL arguments.
 dnnl_exec_arg(x::Memory) = x.memory
 
-const MemoryOrDesc = Union{Memory,MemoryDesc}
-
 # Try to remove as many layers of wrapping around `A` as possible.
 # Since all of the dimension and layout information will be stored in the OneDNN
 # `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
 # cause down-stream type instabilities.
-Memory(A::AbstractArray) = Memory{layout(A)}(A, size(A), creatememory(A))
-Memory(M::Memory, x...) = M
+Memory(A::AbstractArray) = Memory{Opaque}(A, size(A), creatememory(A))
+Memory(M::Memory) = M
 
-function creatememory(A::AbstractArray, desc::Lib.dnnl_memory_desc_t = memorydesc(A))
+function creatememory(A::AbstractArray, desc = memorydesc(A))
     memory = Ref{Lib.dnnl_memory_t}()
     @apicall dnnl_memory_create(memory, desc, global_engine(), A)
-    return unwrap_ref(memory)
+    return memory[]
 end
 
-# Convenience method for creating destionation memories from a source memory.
+function typed(M::Memory{Opaque})
+    A = parent(M)
+    desc = memorydesc(M)
+    return Memory{layout(desc)}(A, size(M), creatememory(A, desc))
+end
+
+# Convenience method for creating destination memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
 Base.eltype(M::Memory{L,T}) where {L,T} = T
 
@@ -194,11 +209,19 @@ Base.@propagate_inbounds function Base.getindex(
     return getindex(M.array, TiledArrays.getoffset(Val(L), size(M), I) + 1)
 end
 
+function Base.getindex(::Memory{Opaque}, I::Vararg{Int,N}) where {N}
+    return error("Cannot index opaque memory formats")
+end
+
 Base.@propagate_inbounds function Base.setindex!(
     M::Memory{L,T,N}, v, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
     return setindex!(M.array, v, TiledArrays.getoffset(Val(L), size(M), I) + 1)
+end
+
+function Base.setindex!(::Memory{Opaque}, v, I::Vararg{Int,N}) where {N}
+    return error("Cannot index opaque memory formats")
 end
 
 memorydesc(M::Memory) = unsafe_load(memorydesc_ptr(M))
@@ -215,18 +238,45 @@ function Base.similar(
     desc::MemoryDesc = memorydesc(M),
     # Final argument not type stable in the general case since MemoryDesc are opaque.
     # However, provide this argument so Ops and create type-stable copies.
-    _format::Val{L} = Val(layout(desc)),
-) where {L,T,N}
+    format::Union{Type{Opaque},Val} = layout(M),
+) where {T,N}
     # Number of bytes to allocate.
     # For now, we just do this to check that nothing funny is going on.
     # Otherwise, we will have to get a little creative for the memory formats that require
     # slightly more than normal storage space.
     expected = Int(getbytes(desc))
-    nelements = TiledArrays.fullsize(_format, dims)
-    @assert sizeof(T) * nelements == expected
+    if format !== Opaque
+        nelements = TiledArrays.fullsize(format, dims)
+        @assert sizeof(T) * nelements == expected
+    end
 
     # Allocate the output array.
     # This will be allocated as just a plain vector.
-    out = similar(M.array, T, nelements)
-    return Memory{L}(out, dims, creatememory(out, desc))
+    out = similar(M.array, T, div(expected, sizeof(T)))
+    return Memory{_rm_val(format)}(out, dims, creatememory(out, desc))
+end
+
+_rm_val(x) = x
+_rm_val(::Val{T}) where {T} = T
+
+function materialize(
+    M::Memory{L,T,N}, format::Val = vlayout(Val(N)), allowreorder = true
+) where {L,T,N}
+    # Check if this memory is already in the requested layout.
+    # If so, return the underlying array.
+    desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
+    actual_strides = strides(memorydesc(M), Val(N))
+    if desired_strides == actual_strides
+        return reshape(parent(M), logicalsize(M))
+    end
+
+    if !allowreorder
+        msg = """
+        Expected strides: $desired_strides.
+        Found strides: $actual_strides.
+        """
+    end
+
+    desc = memorydesc(T, logicalsize(M), desired_strides)
+    return reshape(parent(reorder(desc, M)), logicalsize(M))
 end
