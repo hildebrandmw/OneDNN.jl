@@ -95,7 +95,14 @@ end
 ##### Memory Desc constructors in all their glory!
 #####
 
-memorydesc(x::AbstractArray{T}) where {T} = memorydesc(T, size(x), strides(x))
+struct Reverse end
+struct Forward end
+memorydesc(x::AbstractArray{T}) where {T} = memorydesc(x, Forward())
+memorydesc(x::AbstractArray{T}, ::Forward) where {T} = memorydesc(T, size(x), strides(x))
+function memorydesc(x::AbstractArray{T}, ::Reverse) where {T}
+    return memorydesc(T, reverse(size(x)), reverse(strides(x)))
+end
+
 function memorydesc(
     datatype, dims::NTuple{N,Int}, strides::NTuple{N,Int} = default_strides(dims)
 ) where {N}
@@ -112,6 +119,7 @@ function memorydesc(datatype, dims::NTuple{N,Int}, tag::Lib.dnnl_format_tag_t) w
 end
 
 toany(a::MemoryDesc) = memorydesc(a.data_type, logicalsize(a), dnnl_format_any())
+isany(a::MemoryDesc) = a.format_kind == Lib.dnnl_format_kind_any
 
 function Base.:(==)(a::MaybeRef{MemoryDesc}, b::MaybeRef{MemoryDesc})
     return Bool(Lib.dnnl_memory_desc_equal(wrap_ref(a), wrap_ref(b)))
@@ -125,6 +133,7 @@ getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
 
 # Bridge into TiledArrays
 vlayout(x) = Val(layout(x))
+vlayout(x, ::Reverse) = Val(reverse(layout(x)))
 layout(::Val{N}) where {N} = ntuple(identity, Val(N))
 layout(::Array{T,N}) where {T,N} = layout(Val(N))
 layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
@@ -183,8 +192,26 @@ dnnl_exec_arg(x::Memory) = x.memory
 # Since all of the dimension and layout information will be stored in the OneDNN
 # `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
 # cause down-stream type instabilities.
-Memory(A::AbstractArray) = Memory{Opaque}(A, size(A), creatememory(A))
+Memory(A::AbstractArray) = Memory(A, Forward())
+function Memory(A::AbstractArray, ::Forward)
+    return Memory{Opaque}(vec(ancestor(A)), size(A), creatememory(A))
+end
+function Memory(A::AbstractArray, ::Reverse)
+    desc = memorydesc(A, Reverse())
+    return Memory{Opaque}(vec(ancestor(A)), reverse(size(A)), creatememory(A, desc))
+end
 Memory(M::Memory) = M
+Memory(M::Memory, ::Reverse) = M
+
+function ChainRulesCore.rrule(::typeof(Memory), x, dir::Union{Forward,Reverse})
+    return (
+        Memory(x, dir), Δ -> (ChainRulesCore.NO_FIELDS, Δ, ChainRulesCore.DoesNotExist())
+    )
+end
+
+# Get to the ultimate parent.
+ancestor(x::Array) = x
+ancestor(x) = ancestor(parent(x))
 
 function creatememory(A::AbstractArray, desc = memorydesc(A))
     memory = Ref{Lib.dnnl_memory_t}()
@@ -231,6 +258,41 @@ function memorydesc_ptr(M::Memory)
     return unwrap_ref(md)
 end
 
+#####
+##### Lazy Transpose
+#####
+
+# General idea: swap the dims and strides.
+# TODO: Need to validate that this is a blocked layout with no tiling ...
+function Base.adjoint(M::Memory{Opaque,T,2}) where {T}
+    dims = size(M)
+    strides = Base.strides(memorydesc(M), Val(2))
+
+    reversed_dims = reverse(dims)
+    desc = memorydesc(T, reversed_dims, reverse(strides))
+    memory = creatememory(parent(M), desc)
+    return Memory{Opaque}(parent(M), reversed_dims, memory)
+end
+
+function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N}
+    dims = size(M)
+    strides = Base.strides(memorydesc(M), Val(N))
+
+    dims_permuted = unsafe_permute(dims, perm)
+    strides_permuted = unsafe_permute(strides, perm)
+    desc = memorydesc(T, dims_permuted, strides_permuted)
+    memory = creatememory(parent(M), desc)
+    return Memory{Opaque}(parent(M), dims_permuted, memory)
+end
+
+function unsafe_permute(a::NTuple{N,Int}, b::NTuple{N,Int}) where {N}
+    return ntuple(i -> @inbounds(a[@inbounds b[i]]), Val(N))
+end
+
+#####
+##### Construct more memories!!
+#####
+
 function Base.similar(
     M::Memory,
     ::Type{T} = eltype(M),
@@ -259,8 +321,9 @@ end
 _rm_val(x) = x
 _rm_val(::Val{T}) where {T} = T
 
+materialize(x::AbstractArray, args...; kw...) = x
 function materialize(
-    M::Memory{L,T,N}, format::Val = vlayout(Val(N)), allowreorder = true
+    M::Memory{L,T,N}, format::Val = vlayout(Val(N)); allowreorder = true
 ) where {L,T,N}
     # Check if this memory is already in the requested layout.
     # If so, return the underlying array.
@@ -279,4 +342,35 @@ function materialize(
 
     desc = memorydesc(T, logicalsize(M), desired_strides)
     return reshape(parent(reorder(desc, M)), logicalsize(M))
+end
+
+function materialize(
+    M::Memory{L,T,N},
+    ::Reverse,
+    format::Val = vlayout(Val(N), Reverse());
+    allowreorder = true,
+) where {L,T,N}
+    # Check if this memory is already in the requested layout.
+    # If so, return the underlying array.
+    desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
+    actual_strides = strides(memorydesc(M), Val(N))
+    if desired_strides == actual_strides
+        return reshape(parent(M), reverse(logicalsize(M)))
+    end
+
+    if !allowreorder
+        msg = """
+        Expected strides: $desired_strides.
+        Found strides: $actual_strides.
+        """
+        error(msg)
+    end
+
+    desc = memorydesc(T, logicalsize(M), desired_strides)
+    return reshape(parent(reorder(desc, M)), logicalsize(M))
+end
+
+function ChainRulesCore.rrule(::typeof(materialize), x, args::Vararg{Any,N}; kw...) where {N}
+    return materialize(x, args...; kw...),
+    Δ -> (ChainRulesCore.NO_FIELDS, Δ, ntuple(_ -> ChainRulesCore.DoesNotExist(), Val(N)))
 end

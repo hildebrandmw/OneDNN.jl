@@ -38,6 +38,7 @@ end
 #####
 
 eltwise(f::F, src::Memory) where {F} = eltwise(src, forward_expand(f)...)
+eltwise(::typeof(identity), src::Memory) = src
 function eltwise(
     src::Memory, kind::Lib.dnnl_alg_kind_t, alpha = one(Float32), beta = zero(Float32)
 )
@@ -71,6 +72,7 @@ end
 ##### Backward Eltwise
 #####
 
+eltwise_backward(::typeof(identity), diff_data::Memory, data::Memory) = diff_data
 function eltwise_backward(f::F, diff_data::Memory, data::Memory) where {F}
     return eltwise_backward(diff_data, data, backward_expand(f)...)
 end
@@ -195,7 +197,7 @@ end
 
 function binary!(dst::Memory, src_0::Memory, src_1::Memory, kind)
     op_desc = Ref{Lib.dnnl_binary_desc_t}()
-    @apicall dnnl_binary_desc_init(op_desc, kind, a, b, desc_any)
+    @apicall dnnl_binary_desc_init(op_desc, kind, src_0, src_1, dst)
 
     args = @dnnl_args dst src_0 src_1
     temp_primitive(op_desc, noattributes(), global_engine(), noforward()) do primitive, _
@@ -203,6 +205,15 @@ function binary!(dst::Memory, src_0::Memory, src_1::Memory, kind)
     end
     return dst
 end
+
+Base.:+(a::Memory, b::Memory) = binary(+, a, b)
+Base.:-(a::Memory, b::Memory) = binary(-, a, b)
+Base.broadcasted(::typeof(+), a::Memory, b::Memory) = binary(+, a, b)
+Base.broadcasted(::typeof(-), a::Memory, b::Memory) = binary(-, a, b)
+Base.broadcasted(::typeof(*), a::Memory, b::Memory) = binary(*, a, b)
+Base.broadcasted(::typeof(/), a::Memory, b::Memory) = binary(/, a, b)
+Base.broadcasted(::typeof(min), a::Memory, b::Memory) = binary(min, a, b)
+Base.broadcasted(::typeof(max), a::Memory, b::Memory) = binary(max, a, b)
 
 binary_forward(::typeof(+)) = Lib.dnnl_binary_add
 binary_forward(::typeof(*)) = Lib.dnnl_binary_mul

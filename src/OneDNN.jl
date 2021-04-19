@@ -27,9 +27,9 @@ include("memory.jl")
 
 # ops
 include("ops/simple.jl")
-# include("ops/matmul.jl")
-# include("ops/concat.jl")
-# include("ops/innerproduct.jl")
+include("ops/matmul.jl")
+include("ops/concat.jl")
+include("ops/innerproduct.jl")
 
 # include("placeholder.jl")
 

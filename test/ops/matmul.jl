@@ -1,49 +1,68 @@
 @testset "Testing MatMul" begin
     # First, test normal matmul.
+    a = rand(Float32, 10, 20)
+    b = rand(Float32, 20, 10)
+    A = OneDNN.Memory(a)
+    B = OneDNN.Memory(b)
 
-    Memory = OneDNN.Memory
-    a = rand(Float32, 4, 2)
-    b = rand(Float32, 2, 3)
-    A = Memory(a)
-    B = Memory(b)
+    Z = OneDNN.typed(OneDNN.matmul(A, B))
+    z = a * b
+    @test isa(Z, OneDNN.Memory)
+    @test size(Z) == (size(a, 1), size(b, 2))
+    @test isapprox(Z, z)
 
-    op = OneDNN.MatMul(A, B)
-    c = op(A, B)
-    @test isa(c, OneDNN.Memory)
-    @test size(c) == (size(a, 1), size(b, 2))
+    Z = OneDNN.typed(OneDNN.matmul(
+        OneDNN.Memory(transpose(b)), OneDNN.Memory(transpose(a))
+    ))
+    @test isapprox(transpose(Z), z)
 
-    # Note: the underlying Julia array in `c` is just a vector because in general,
-    # derived memory formats may require more memory than just a product of the dimensions.
-    @test ndims(c) == 2
+    # Do pullbacks work?
+    # Note: `rrule` definition lives in ChainRuies.jl under `Base/arraymath.jl`.
+    x = randn(Float32, 100, 100)
+    y = randn(Float32, 100, 100)
+    X = OneDNN.Memory(x)
+    Y = OneDNN.Memory(y)
 
-    # Does multiplication actuall return the correct result?
-    @test isapprox(c, a * b)
+    Z, back_dnnl = Zygote._pullback(*, X, Y)
+    z, back_jl = Zygote._pullback(*, x, y)
+    @test isapprox(OneDNN.typed(Z), z)
 
-    # # Test applying some post ops
-    # x = rand(Float32, 2, 2)
-    # y = rand(Float32, 2, 2)
-    # z = rand(Float32, 2, 2)
+    dz = Float32(0.125) * randn(Float32, size(z))
+    DZ = OneDNN.Memory(dz)
 
-    # # expected result
-    # expected = (x * y) + (transpose(z) * x)
+    grads_jl = back_jl(dz)
+    grads_dnnl = back_dnnl(DZ)
 
-    # out = OneDNN.matmul(y, x)
-
-    # postops = OneDNN.PostOps()
-    # OneDNN.appendsum!(postops)
-    # attr = OneDNN.Attributes()
-    # OneDNN.add!(attr, postops)
-    # OneDNN.matmul!(out, x, transpose(z); attributes = attr)
-
-    # result = OneDNN.materialize(out)
-    # @test isapprox(result, expected)
-
-    # # Test scaling
-    # x = randn(Float32, 5, 5)
-    # y = randn(Float32, 5, 5)
-    # attr = OneDNN.Attributes()
-    # OneDNN.setscale!(attr, 2)
-    # z = OneDNN.matmul(y, x; attributes = attr)
-
-    # @test isapprox(OneDNN.materialize(z), 2 * x * y)
+    @test length(grads_jl) == length(grads_dnnl) == 3
+    @test grads_jl[1] === grads_dnnl[1] === nothing
+    @test isapprox(grads_jl[2], OneDNN.typed(grads_dnnl[2]))
+    @test isapprox(grads_jl[3], OneDNN.typed(grads_dnnl[3]))
 end
+
+# # Test applying some post ops
+# x = rand(Float32, 2, 2)
+# y = rand(Float32, 2, 2)
+# z = rand(Float32, 2, 2)
+
+# # expected result
+# expected = (x * y) + (transpose(z) * x)
+
+# out = OneDNN.matmul(y, x)
+
+# postops = OneDNN.PostOps()
+# OneDNN.appendsum!(postops)
+# attr = OneDNN.Attributes()
+# OneDNN.add!(attr, postops)
+# OneDNN.matmul!(out, x, transpose(z); attributes = attr)
+
+# result = OneDNN.materialize(out)
+# @test isapprox(result, expected)
+
+# # Test scaling
+# x = randn(Float32, 5, 5)
+# y = randn(Float32, 5, 5)
+# attr = OneDNN.Attributes()
+# OneDNN.setscale!(attr, 2)
+# z = OneDNN.matmul(y, x; attributes = attr)
+
+# @test isapprox(OneDNN.materialize(z), 2 * x * y)
