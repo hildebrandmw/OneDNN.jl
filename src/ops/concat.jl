@@ -1,23 +1,23 @@
 function concat(A::Vector{T}, dim::Integer) where {T<:Memory}
     nargs = length(A)
 
-    a = first(A)
-    dims = size(a)
-    vndims = Val(ndims(a))
+    front = first(A)
+    dims = size(front)
+    vndims = Val(ndims(front))
     outputdim = sum(i -> size(i, dim), A)
     outsize = ntuple(i -> (i == dim) ? outputdim : dims[i], vndims)
-    desc_any = memorydesc(eltype(a), outsize, dnnl_format_any())
+    desc_any = memorydesc(eltype(front), outsize, dnnl_format_any())
     return temp_primitive(
         Lib.dnnl_concat_primitive_desc_create,
         desc_any,
         nargs,
-        dim - 1,
+        ndims(front) - dim,
         map(memorydesc, A),
         noattributes(),
         global_engine(),
     ) do primitive, primitive_descriptor
         dst_desc = query_md(primitive_descriptor, Lib.dnnl_query_dst_md)
-        dst = similar(a, eltype(a), outsize, dst_desc)
+        dst = similar(front, eltype(front), outsize, dst_desc)
         argbuffer = Arguments(Vector{Lib.dnnl_exec_arg_t}(undef, nargs + 1))
         for (i, _a) in enumerate(A)
             argbuffer[i] = dnnl_arg(Lib.DNNL_ARG_MULTIPLE_SRC + i - 1, _a)

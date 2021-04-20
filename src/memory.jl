@@ -49,9 +49,11 @@ function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::MemoryDesc)
 end
 
 # Specialize on typed dimensions to make typestable
-logicalsize(md::MemoryDesc) = md.dims[1:(md.ndims)]
-logicalsize(md::MemoryDesc, v::Val) = ntuple(i -> md.dims[i], v)
-Base.strides(md::MemoryDesc, v::Val) = ntuple(i -> md.format_desc.blocking.strides[i], v)
+logicalsize(md::MemoryDesc) = reverse(md.dims[1:(md.ndims)])
+logicalsize(md::MemoryDesc, v::Val) = reverse(ntuple(i -> md.dims[i], v))
+function Base.strides(md::MemoryDesc, v::Val)
+    return reverse(ntuple(i -> md.format_desc.blocking.strides[i], v))
+end
 Base.ndims(md::MemoryDesc) = md.ndims
 
 function Base.show(io::IO, md::MemoryDesc)
@@ -100,21 +102,23 @@ struct Forward end
 memorydesc(x::AbstractArray{T}) where {T} = memorydesc(x, Forward())
 memorydesc(x::AbstractArray{T}, ::Forward) where {T} = memorydesc(T, size(x), strides(x))
 function memorydesc(x::AbstractArray{T}, ::Reverse) where {T}
-    return memorydesc(T, reverse(size(x)), reverse(strides(x)))
+    return memorydesc(T, size(x), strides(x))
 end
 
 function memorydesc(
     datatype, dims::NTuple{N,Int}, strides::NTuple{N,Int} = default_strides(dims)
 ) where {N}
     handle = Ref{MemoryDesc}()
-    @apicall dnnl_memory_desc_init_by_strides(handle, N, dims, datatype, strides)
+    @apicall dnnl_memory_desc_init_by_strides(
+        handle, N, reverse(dims), datatype, reverse(strides)
+    )
     return unwrap_ref(handle)
 end
 
 # convenience creation by tag.
 function memorydesc(datatype, dims::NTuple{N,Int}, tag::Lib.dnnl_format_tag_t) where {T,N}
     handle = Ref{MemoryDesc}()
-    @apicall dnnl_memory_desc_init_by_tag(handle, N, dims, datatype, tag)
+    @apicall dnnl_memory_desc_init_by_tag(handle, N, reverse(dims), datatype, tag)
     return unwrap_ref(handle)
 end
 
@@ -355,7 +359,7 @@ function materialize(
     desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
     actual_strides = strides(memorydesc(M), Val(N))
     if desired_strides == actual_strides
-        return reshape(parent(M), reverse(logicalsize(M)))
+        return reshape(parent(M), size(M))
     end
 
     if !allowreorder
@@ -370,7 +374,9 @@ function materialize(
     return reshape(parent(reorder(desc, M)), logicalsize(M))
 end
 
-function ChainRulesCore.rrule(::typeof(materialize), x, args::Vararg{Any,N}; kw...) where {N}
+function ChainRulesCore.rrule(
+    ::typeof(materialize), x, args::Vararg{Any,N}; kw...
+) where {N}
     return materialize(x, args...; kw...),
     Δ -> (ChainRulesCore.NO_FIELDS, Δ, ntuple(_ -> ChainRulesCore.DoesNotExist(), Val(N)))
 end

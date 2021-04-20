@@ -22,7 +22,7 @@ function layout(memory_desc::Lib.dnnl_memory_desc_t)
     end
     # Order the indices.
     _strides = collect(blocking_desc.strides[1:ndims])
-    outer = sortperm(_strides)
+    outer = reverse(sortperm(_strides))
     return (tiles..., outer...)
 end
 

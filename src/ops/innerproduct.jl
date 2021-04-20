@@ -10,7 +10,7 @@ function innerproduct(
     weights_desc = memorydesc(_weights),
     callback = (x...) -> nothing,
 )
-    dst_dims = (size(_src, 1), size(bias, 1))
+    dst_dims = (size(bias, 1), size(_src, 1))
     dst_desc = memorydesc(eltype(_src), dst_dims, dnnl_format_any())
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_forward_desc_init(
@@ -72,10 +72,11 @@ end
 function innerproduct_backward_weights(
     diff_weights_dims::NTuple, src::Memory, diff_dst::Memory
 )
-    diff_bias_dims = (diff_weights_dims[1],)
+    diff_bias_dims = (diff_weights_dims[2],)
     diff_weights_desc = memorydesc(eltype(src), diff_weights_dims, dnnl_format_any())
     diff_bias_desc = memorydesc(eltype(src), diff_bias_dims, Lib.dnnl_a)
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
+
     @apicall dnnl_inner_product_backward_weights_desc_init(
         inner_product_desc, src, diff_weights_desc, diff_bias_desc, diff_dst
     )
@@ -115,7 +116,7 @@ function Dense(weights, bias, activation)
     )
 end
 
-Dense(m::Flux.Dense) = Dense(OneDNN.Memory(m.weight), OneDNN.Memory(m.bias), m.σ)
+Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m.bias), m.σ)
 
 function (dense::Dense)(src::Memory, fuse_activation = true)
     attributes = Attributes()
@@ -151,8 +152,7 @@ function (dense::Dense)(src::Memory, fuse_activation = true)
 end
 
 function ChainRulesCore.rrule(dense::Dense, src::Memory)
-    # The result of `canfuse` is known at compile time, so Julia can optimize out the
-    # branch.
+    # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
     return canfuse(dense.activation) ? rrule_fused(dense, src) : rrule_unfused(dense, src)
 end
 
