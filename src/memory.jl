@@ -146,7 +146,7 @@ layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 # to work on its own
 struct Opaque end
 
-mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
+mutable struct Memory{L,T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
 
@@ -164,9 +164,9 @@ mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
 
     # Inner constructor to ensure finalizers.
     function Memory{L}(
-        A::U, dims::NTuple{N,Int}, memory::Lib.dnnl_memory_t
-    ) where {L,T,U<:AbstractArray{T},N}
-        object = new{L,T,N,U}(A, dims, memory)
+        array::A, dims::NTuple{N,Int}, memory::Lib.dnnl_memory_t
+    ) where {L,T,N,A<:AbstractArray{T,N}}
+        object = new{L,T,N,A}(array, dims, memory)
         finalizer(object) do obj
             Lib.dnnl_memory_destroy(obj.memory)
         end
@@ -178,6 +178,7 @@ layout(x::Opaque) = x
 
 logicalsize(x::Memory) = size(x)
 Base.parent(x::Memory) = x.array
+arraytype(::Memory{L,T,N,A}) where {L,T,N,A} = A
 
 Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x))")
 Base.show(io::IO, ::MIME"text/plain", x::Memory{Opaque}) = show(io, x)
@@ -198,7 +199,7 @@ dnnl_exec_arg(x::Memory) = x.memory
 # cause down-stream type instabilities.
 Memory(A::AbstractArray) = Memory(A, Forward())
 function Memory(A::AbstractArray, ::Forward)
-    return Memory{Opaque}(vec(ancestor(A)), size(A), creatememory(A))
+    return Memory{Opaque}(ancestor(A), size(A), creatememory(A))
 end
 function Memory(A::AbstractArray, ::Reverse)
     desc = memorydesc(A, Reverse())
@@ -281,9 +282,9 @@ end
 function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N}
     dims = size(M)
     strides = Base.strides(memorydesc(M), Val(N))
-
     dims_permuted = unsafe_permute(dims, perm)
     strides_permuted = unsafe_permute(strides, perm)
+
     desc = memorydesc(T, dims_permuted, strides_permuted)
     memory = creatememory(parent(M), desc)
     return Memory{Opaque}(parent(M), dims_permuted, memory)
@@ -317,8 +318,10 @@ function Base.similar(
     end
 
     # Allocate the output array.
-    # This will be allocated as just a plain vector.
-    out = similar(M.array, T, div(expected, sizeof(T)))
+    # This will be allocated as just a plain vector with dimensions padded with ones so it
+    # has the same dimension as the wrapped "Memory"
+    padded_dims = (div(expected, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
+    out = similar(M.array, T, padded_dims)
     return Memory{_rm_val(format)}(out, dims, creatememory(out, desc))
 end
 

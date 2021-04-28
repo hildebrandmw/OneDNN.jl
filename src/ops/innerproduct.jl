@@ -10,7 +10,7 @@ function innerproduct(
     weights_desc = memorydesc(_weights),
     callback = (x...) -> nothing,
 )
-    dst_dims = (size(bias, 1), size(_src, 1))
+    dst_dims = (size(bias, 1), size(_src, 2))
     dst_desc = memorydesc(eltype(_src), dst_dims, dnnl_format_any())
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_forward_desc_init(
@@ -118,7 +118,8 @@ end
 
 Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m.bias), m.σ)
 
-function (dense::Dense)(src::Memory, fuse_activation = true)
+function (dense::Dense)(_src, fuse_activation = true)
+    src = Memory(_src)
     attributes = Attributes()
     if fuse_activation
         postops = PostOps()
@@ -151,16 +152,22 @@ function (dense::Dense)(src::Memory, fuse_activation = true)
     end
 end
 
-function ChainRulesCore.rrule(dense::Dense, src::Memory)
+function ChainRulesCore.rrule(dense::Dense, src::AbstractMatrix)
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
     return canfuse(dense.activation) ? rrule_fused(dense, src) : rrule_unfused(dense, src)
 end
 
-function rrule_fused(dense, src)
+function rrule_fused(dense, _src)
+    src = Memory(_src)
     src_size = size(src)
     dst = dense(src)
-    pullback = function dense_fused_pullback(diff_dst::Memory)
+    pullback = function dense_fused_pullback(_diff_dst)
+        # Maybe convert argument
+        diff_dst = Memory(_diff_dst)
+        # Reverse activation function.
         diff_dst_pre = eltwise_backward(dense.activation, diff_dst, dst)
+
+        # Backprop innerproduct kernel
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
         (diff_weights, diff_bias) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
         return ((weights = diff_weights, bias = diff_bias), diff_src)
@@ -168,11 +175,13 @@ function rrule_fused(dense, src)
     return dst, pullback
 end
 
-function rrule_unfused(dense, src)
+function rrule_unfused(dense, _src)
+    src = Memory(_src)
     dst_pre = dense(src, false)
     dst = eltwise(dense.activation, dst_pre)
     src_size = size(src)
-    pullback = function dense_pullback(diff_dst::Memory)
+    pullback = function dense_pullback(_diff_dst)
+        diff_dst = Memory(_diff_dst)
         diff_dst_pre = eltwise_backward(dense.activation, diff_dst, dst_pre)
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
         (diff_weights, diff_bias) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
