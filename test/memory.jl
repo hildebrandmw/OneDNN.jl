@@ -27,6 +27,36 @@
     @test dnnl_dims(x) == (_strides..., 0, 0, 0, 0, 0, 0, 0, 0, 0)
 end
 
+@testset "Testing Views" begin
+    x = rand(Float32, 40, 40)
+    y = rand(Float32, 40, 40)
+
+    vx = view(x, 1, :)
+    VX = OneDNN.Memory(vx)
+    @test OneDNN.typed(VX) == vx
+    @test OneDNN.materialize(VX) == vx
+
+    vy = view(x, :, 1)
+    VY = OneDNN.Memory(vy)
+    @test OneDNN.typed(VY) == vy
+    @test OneDNN.materialize(VY) == vy
+
+    Z = VX + VY
+    @test OneDNN.typed(Z) == vx .+ vy
+    @test OneDNN.materialize(Z) == vx .+ vy
+
+    # 2D views
+    vx = view(x, 1:5, 2:11)
+    VX = OneDNN.Memory(vx)
+    @test OneDNN.typed(VX) == vx
+    @test OneDNN.materialize(VX) == vx
+
+    vy = view(y, 20:30, :)
+    VY = OneDNN.Memory(vy)
+    @test OneDNN.typed(VY) == vy
+    @test OneDNN.materialize(VY) == vy
+end
+
 # @testset "Testing Memory" begin
 #     #####
 #     ##### Memory Descriptors

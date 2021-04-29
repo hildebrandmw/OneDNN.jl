@@ -189,12 +189,17 @@ end
 
 # Note: No need to define `rrule`s here since higher level definitions should take
 # care of this automatically.
-binary(f::F, a::Memory, b::Memory) where {F} = binary(a, b, binary_forward(f))
+function binary(f::F, src_0::Memory, src_1::Memory) where {F}
+    return binary(src_0, src_1, binary_forward(f))
+end
 function binary(src_0::Memory, src_1::Memory, kind)
     dst = similar(src_0)
     return binary!(dst, src_0, src_1, kind)
 end
 
+function binary!(f::F, dst::Memory, src_0::Memory, src_1::Memory) where {F}
+    return binary!(dst, src_0, src_1, binary_forward(f))
+end
 function binary!(dst::Memory, src_0::Memory, src_1::Memory, kind)
     op_desc = Ref{Lib.dnnl_binary_desc_t}()
     @apicall dnnl_binary_desc_init(op_desc, kind, src_0, src_1, dst)

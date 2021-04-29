@@ -64,9 +64,8 @@ function validate(layout::MemoryLayout{N}) where {N}
                 saw_int && error("Integer index $index occurs more than once!")
                 saw_int = true
             elseif isa(desc, Tile) && desc.dim == index
-                saw_int && error(
-                    "Integer index $index occurs before its corresponding tile index!"
-                )
+                saw_int &&
+                    error("Integer index $index occurs before its corresponding tile index!")
                 saw_tile = true
             end
         end
@@ -178,10 +177,19 @@ end
 #####
 
 function getoffset(
-    valT::Val{T}, size::Tuple{Vararg{Int,N}}, I::Tuple{Vararg{Int,N}}
+    valT::Val{T}, size::Tuple{Vararg{Int,N}}, I::Tuple{Vararg{Int,N}}, strides::Nothing
 ) where {T,N}
     Base.@_inline_meta
-    strides = _strides(valT, size)
+    return getoffset(valT, size, I, _strides(valT, size))
+end
+
+function getoffset(
+    valT::Val{T},
+    size::Tuple{Vararg{Int,N}},
+    I::Tuple{Vararg{Int,N}},
+    strides::Tuple{Vararg{Int,N}},
+) where {T,N}
+    Base.@_inline_meta
     index = splitindex(valT, I)
     offset = zero(Int)
     for i in eachindex(strides)
@@ -214,18 +222,18 @@ vlayout(x) = Val(layout(x))
 @inline Base.size(x::TiledArray) = x.size
 Base.IndexStyle(::Type{<:TiledArray}) = Base.IndexCartesian()
 Base.@propagate_inbounds function Base.getindex(
-    A::TiledArray{T,L,N}, I::Vararg{Int,N}
+    A::TiledArray{T,L,N}, I::Vararg{Int,N}; strides = nothing
 ) where {T,L,N}
     @boundscheck checkbounds(A, I...)
-    offset = getoffset(vlayout(A), size(A), I) + one(Int)
+    offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
     return @inbounds(getindex(parent(A), offset))
 end
 
 Base.@propagate_inbounds function Base.setindex!(
-    A::TiledArray{T,L,N}, v, I::Vararg{Int,N}
+    A::TiledArray{T,L,N}, v, I::Vararg{Int,N}; strides = nothing
 ) where {T,L,N}
     @boundscheck checkbounds(A, I...)
-    offset = getoffset(vlayout(A), size(A), I) + one(Int)
+    offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
     return @inbounds setindex!(parent(A), v, offset)
 end
 

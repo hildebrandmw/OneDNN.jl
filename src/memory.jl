@@ -97,14 +97,7 @@ end
 ##### Memory Desc constructors in all their glory!
 #####
 
-struct Reverse end
-struct Forward end
-memorydesc(x::AbstractArray{T}) where {T} = memorydesc(x, Forward())
-memorydesc(x::AbstractArray{T}, ::Forward) where {T} = memorydesc(T, size(x), strides(x))
-function memorydesc(x::AbstractArray{T}, ::Reverse) where {T}
-    return memorydesc(T, size(x), strides(x))
-end
-
+memorydesc(x::AbstractArray{T}) where {T} = memorydesc(T, size(x), strides(x))
 function memorydesc(
     datatype, dims::NTuple{N,Int}, strides::NTuple{N,Int} = default_strides(dims)
 ) where {N}
@@ -137,7 +130,6 @@ getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
 
 # Bridge into TiledArrays
 vlayout(x) = Val(layout(x))
-vlayout(x, ::Reverse) = Val(reverse(layout(x)))
 layout(::Val{N}) where {N} = ntuple(identity, Val(N))
 layout(::Array{T,N}) where {T,N} = layout(Val(N))
 layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
@@ -146,9 +138,10 @@ layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 # to work on its own
 struct Opaque end
 
-mutable struct Memory{L,T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
+    offset::Int
 
     # Derived `Memory` objects will have their dimension stripped away since this information
     # is not maintained in a type stable manner.
@@ -164,9 +157,9 @@ mutable struct Memory{L,T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
 
     # Inner constructor to ensure finalizers.
     function Memory{L}(
-        array::A, dims::NTuple{N,Int}, memory::Lib.dnnl_memory_t
-    ) where {L,T,N,A<:AbstractArray{T,N}}
-        object = new{L,T,N,A}(array, dims, memory)
+        array::A, offset, dims::NTuple{N,Int}, memory::Lib.dnnl_memory_t
+    ) where {L,T,N,A<:AbstractArray{T}}
+        object = new{L,T,N,A}(array, convert(Int64, offset), dims, memory)
         finalizer(object) do obj
             Lib.dnnl_memory_destroy(obj.memory)
         end
@@ -177,6 +170,8 @@ layout(::Memory{L}) where {L} = L
 layout(x::Opaque) = x
 
 logicalsize(x::Memory) = size(x)
+Base.strides(x::Memory{L,T,N}) where {L,T,N} = strides(memorydesc(x), Val(N))
+
 Base.parent(x::Memory) = x.array
 arraytype(::Memory{L,T,N,A}) where {L,T,N,A} = A
 
@@ -197,20 +192,23 @@ dnnl_exec_arg(x::Memory) = x.memory
 # Since all of the dimension and layout information will be stored in the OneDNN
 # `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
 # cause down-stream type instabilities.
-Memory(A::AbstractArray) = Memory(A, Forward())
-function Memory(A::AbstractArray, ::Forward)
-    return Memory{Opaque}(ancestor(A), size(A), creatememory(A))
+function Memory(A::AbstractArray)
+    return Memory{Opaque}(ancestor(A), _offset(A), size(A), creatememory(A))
 end
-function Memory(A::AbstractArray, ::Reverse)
-    desc = memorydesc(A, Reverse())
-    return Memory{Opaque}(vec(ancestor(A)), reverse(size(A)), creatememory(A, desc))
-end
-Memory(M::Memory) = M
-Memory(M::Memory, ::Reverse) = M
 
-function ChainRulesCore.rrule(::typeof(Memory), x, dir::Union{Forward,Reverse})
+_offset(::AbstractArray) = one(Int64)
+_offset(x::Base.SubArray) = Base.first_index(x)
+
+Memory(M::Memory) = M
+
+function ChainRulesCore.rrule(::typeof(Memory), x, args::Vararg{Any,N}) where {N}
     return (
-        Memory(x, dir), Δ -> (ChainRulesCore.NO_FIELDS, Δ, ChainRulesCore.DoesNotExist())
+        Memory(x, args...),
+        Δ -> (
+            ChainRulesCore.NO_FIELDS,
+            Δ,
+            ntuple(_ -> ChainRulesCore.DoesNotExist(), Val(N)),
+        ),
     )
 end
 
@@ -227,7 +225,7 @@ end
 function typed(M::Memory{Opaque})
     A = parent(M)
     desc = memorydesc(M)
-    return Memory{layout(desc)}(A, size(M), creatememory(A, desc))
+    return Memory{layout(desc)}(A, M.offset, size(M), creatememory(A, desc))
 end
 
 # Convenience method for creating destination memories from a source memory.
@@ -238,7 +236,8 @@ Base.@propagate_inbounds function Base.getindex(
     M::Memory{L,T,N}, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
-    return getindex(M.array, TiledArrays.getoffset(Val(L), size(M), I) + 1)
+    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
+    return getindex(M.array, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides))
 end
 
 function Base.getindex(::Memory{Opaque}, I::Vararg{Int,N}) where {N}
@@ -249,7 +248,10 @@ Base.@propagate_inbounds function Base.setindex!(
     M::Memory{L,T,N}, v, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
-    return setindex!(M.array, v, TiledArrays.getoffset(Val(L), size(M), I) + 1)
+    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
+    return setindex!(
+        M.array, v, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides)
+    )
 end
 
 function Base.setindex!(::Memory{Opaque}, v, I::Vararg{Int,N}) where {N}
@@ -276,7 +278,7 @@ function Base.adjoint(M::Memory{Opaque,T,2}) where {T}
     reversed_dims = reverse(dims)
     desc = memorydesc(T, reversed_dims, reverse(strides))
     memory = creatememory(parent(M), desc)
-    return Memory{Opaque}(parent(M), reversed_dims, memory)
+    return Memory{Opaque}(parent(M), M.offset, reversed_dims, memory)
 end
 
 function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N}
@@ -322,7 +324,9 @@ function Base.similar(
     # has the same dimension as the wrapped "Memory"
     padded_dims = (div(expected, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
     out = similar(M.array, T, padded_dims)
-    return Memory{_rm_val(format)}(out, dims, creatememory(out, desc))
+
+    # Since we specifically created this array, the offset will always start atone.
+    return Memory{_rm_val(format)}(out, 1, dims, creatememory(out, desc))
 end
 
 _rm_val(x) = x
@@ -335,8 +339,14 @@ function materialize(
     # Check if this memory is already in the requested layout.
     # If so, return the underlying array.
     desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
-    actual_strides = strides(memorydesc(M), Val(N))
-    if desired_strides == actual_strides
+    actual_strides = strides(M)
+
+    # In order to return the underlying object, we need to ensure that:
+    # 1. The length of the wrapped object is the same as the length of the Memory.
+    # This helps handle views correctly.
+    #
+    # 2. Strides are the same[
+    if length(parent(M)) == length(M) && desired_strides == actual_strides
         return reshape(parent(M), logicalsize(M))
     end
 
@@ -345,32 +355,6 @@ function materialize(
         Expected strides: $desired_strides.
         Found strides: $actual_strides.
         """
-    end
-
-    desc = memorydesc(T, logicalsize(M), desired_strides)
-    return reshape(parent(reorder(desc, M)), logicalsize(M))
-end
-
-function materialize(
-    M::Memory{L,T,N},
-    ::Reverse,
-    format::Val = vlayout(Val(N), Reverse());
-    allowreorder = true,
-) where {L,T,N}
-    # Check if this memory is already in the requested layout.
-    # If so, return the underlying array.
-    desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
-    actual_strides = strides(memorydesc(M), Val(N))
-    if desired_strides == actual_strides
-        return reshape(parent(M), size(M))
-    end
-
-    if !allowreorder
-        msg = """
-        Expected strides: $desired_strides.
-        Found strides: $actual_strides.
-        """
-        error(msg)
     end
 
     desc = memorydesc(T, logicalsize(M), desired_strides)
