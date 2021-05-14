@@ -7,7 +7,7 @@ using LinearAlgebra: LinearAlgebra
 using ChainRulesCore: ChainRulesCore
 using Flux: Flux
 using MacroTools: MacroTools
-#using Zygote: Zygote
+using Zygote: Zygote
 
 # # time how long some operations take
 # using TimerOutputs: TimerOutputs

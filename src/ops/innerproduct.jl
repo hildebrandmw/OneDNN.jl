@@ -115,8 +115,9 @@ function Dense(weights, bias, activation)
         weights_memory, Memory(bias), activation, false, memorydesc(weights_memory)
     )
 end
-
 Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m.bias), m.σ)
+
+Flux.@functor Dense (weights, bias)
 
 function (dense::Dense)(_src, fuse_activation = true)
     src = Memory(_src)
@@ -152,15 +153,16 @@ function (dense::Dense)(_src, fuse_activation = true)
     end
 end
 
-function ChainRulesCore.rrule(dense::Dense, src::AbstractMatrix)
+function ChainRulesCore.rrule(dense::Dense, src::AbstractMatrix, fuse_activation::Bool)
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
-    return canfuse(dense.activation) ? rrule_fused(dense, src) : rrule_unfused(dense, src)
+    return canfuse(dense.activation) ? rrule_fused(dense, src, fuse_activation) :
+           rrule_unfused(dense, src, fuse_activation)
 end
 
-function rrule_fused(dense, _src)
+function rrule_fused(dense::T, _src, _fuse_activation) where {T}
     src = Memory(_src)
     src_size = size(src)
-    dst = dense(src)
+    dst = dense(src, true)
     pullback = function dense_fused_pullback(_diff_dst)
         # Maybe convert argument
         diff_dst = Memory(_diff_dst)
@@ -169,13 +171,19 @@ function rrule_fused(dense, _src)
 
         # Backprop innerproduct kernel
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
-        (diff_weights, diff_bias) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
-        return ((weights = diff_weights, bias = diff_bias), diff_src)
+        (
+            diff_weights, diff_bias
+        ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
+        return (
+            ChainRulesCore.Composite{T}(; weights = diff_weights, bias = diff_bias),
+            diff_src,
+            ChainRulesCore.DoesNotExist(),
+        )
     end
     return dst, pullback
 end
 
-function rrule_unfused(dense, _src)
+function rrule_unfused(dense::T, _src, _fuse_activation) where {T}
     src = Memory(_src)
     dst_pre = dense(src, false)
     dst = eltwise(dense.activation, dst_pre)
@@ -184,9 +192,15 @@ function rrule_unfused(dense, _src)
         diff_dst = Memory(_diff_dst)
         diff_dst_pre = eltwise_backward(dense.activation, diff_dst, dst_pre)
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
-        (diff_weights, diff_bias) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
+        (
+            diff_weights, diff_bias
+        ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
 
-        return ((weights = diff_weights, bias = diff_bias), diff_src)
+        return (
+            ChainRulesCore.Composite{T}(; weights = diff_weights, bias = diff_bias),
+            diff_src,
+            ChainRulesCore.DoesNotExist(),
+        )
     end
     return dst, pullback
 end

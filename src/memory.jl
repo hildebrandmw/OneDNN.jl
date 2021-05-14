@@ -201,15 +201,8 @@ _offset(x::Base.SubArray) = Base.first_index(x)
 
 Memory(M::Memory) = M
 
-function ChainRulesCore.rrule(::typeof(Memory), x, args::Vararg{Any,N}) where {N}
-    return (
-        Memory(x, args...),
-        Δ -> (
-            ChainRulesCore.NO_FIELDS,
-            Δ,
-            ntuple(_ -> ChainRulesCore.DoesNotExist(), Val(N)),
-        ),
-    )
+function ChainRulesCore.rrule(::Type{<:Memory}, x)
+    return (Memory(x), Δ -> (ChainRulesCore.NO_FIELDS, Δ))
 end
 
 # Get to the ultimate parent.
@@ -289,7 +282,7 @@ function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N
 
     desc = memorydesc(T, dims_permuted, strides_permuted)
     memory = creatememory(parent(M), desc)
-    return Memory{Opaque}(parent(M), dims_permuted, memory)
+    return Memory{Opaque}(parent(M), M.offset, dims_permuted, memory)
 end
 
 function unsafe_permute(a::NTuple{N,Int}, b::NTuple{N,Int}) where {N}
