@@ -179,14 +179,28 @@ Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x)
 Base.show(io::IO, ::MIME"text/plain", x::Memory{Opaque}) = show(io, x)
 
 # for creating OneDNN arguments
-Base.cconvert(::Type{Lib.dnnl_memory_t}, x::Memory) = x.memory
+function setptr!(x::Memory{<:Any,T}) where {T}
+    @apicall dnnl_memory_set_data_handle_v2(
+        x.memory, pointer(x.array, x.offset), global_stream()
+    )
+end
+
+function Base.cconvert(::Type{Lib.dnnl_memory_t}, x::Memory)
+    setptr!(x)
+    return x.memory
+end
+
 function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_t}}, x::Memory)
+    setptr!(x)
     return Ptr{Lib.dnnl_memory_t}(Base.pointer_from_objref(x) + fieldoffset(typeof(x), 3))
 end
 Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::Memory) = memorydesc_ptr(x)
 
 # For constructing DNNL arguments.
-dnnl_exec_arg(x::Memory) = x.memory
+function dnnl_exec_arg(x::Memory)
+    setptr!(x)
+    return x.memory
+end
 
 # Try to remove as many layers of wrapping around `A` as possible.
 # Since all of the dimension and layout information will be stored in the OneDNN
@@ -348,6 +362,7 @@ function materialize(
         Expected strides: $desired_strides.
         Found strides: $actual_strides.
         """
+        throw(ArgumentError(msg))
     end
 
     desc = memorydesc(T, logicalsize(M), desired_strides)

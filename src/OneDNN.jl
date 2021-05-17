@@ -46,22 +46,25 @@ end
 global_engine() = GLOBAL_ENGINE[]
 global_stream() = GLOBAL_STREAM[]
 
-# #####
-# ##### Flux compat
-# #####
-#
-# # TODO: Turns out that updating is better parallelized across the layer dimension than the
-# # within each parameter itself
-# function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-#     # Make sure both objects have the same memory layout.
-#     if memorydesc(x) != memorydesc(Δ)
-#         error("Cannot update Memories with different descriptions")
-#     end
-#
-#     x.array .= x.array .- (o.eta .* Δ.array)
-#     return nothing
-# end
-#
+#####
+##### Flux compat
+#####
+
+# TODO: Turns out that updating is better parallelized across the layer dimension than the
+# within each parameter itself
+function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+    # Make sure both objects have the same memory layout.
+    if memorydesc(x) != memorydesc(Δ)
+        error("Cannot update Memories with different descriptions")
+    end
+
+    xa = reshape(parent(x), size(x))
+    Δa = reshape(parent(Δ), size(Δ))
+
+    xa .= xa .- (o.eta .* Δa)
+    return nothing
+end
+
 # # # Apply the negative here so we can just add together in `update!`.
 # # # This is because it appears that OneDNN is lacking a binary `-`
 # # Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
