@@ -54,8 +54,9 @@ global_stream() = GLOBAL_STREAM[]
 # within each parameter itself
 function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
     # Make sure both objects have the same memory layout.
-    if memorydesc(x) != memorydesc(Δ)
-        error("Cannot update Memories with different descriptions")
+    mx = memorydesc(x)
+    if mx != memorydesc(Δ)
+        update_typed!(o, typed(x), typed(Δ))
     end
 
     xa = reshape(parent(x), size(x))
@@ -63,6 +64,10 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
 
     xa .= xa .- (o.eta .* Δa)
     return nothing
+end
+
+function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+    x .= x .- (o.eta .* Δ)
 end
 
 # # # Apply the negative here so we can just add together in `update!`.
