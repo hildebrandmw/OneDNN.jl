@@ -57,6 +57,7 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
     mx = memorydesc(x)
     if mx != memorydesc(Δ)
         update_typed!(o, typed(x), typed(Δ))
+        return nothing
     end
 
     xa = reshape(parent(x), size(x))
