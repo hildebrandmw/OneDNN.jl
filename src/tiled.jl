@@ -34,5 +34,5 @@ function _blocking_desc(x::Lib.dnnl_memory_desc_t)
     return _blocking_desc(x.format_desc)
 end
 
-# TODO: Fix this weird "ANONYMOUS1" thing cause by the Union ...
+# TODO: Fix this weird "ANONYMOUS1" thing caused by the Union ...
 _blocking_desc(x::Lib.ANONYMOUS1_format_desc) = x.blocking

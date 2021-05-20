@@ -243,6 +243,7 @@ Base.@propagate_inbounds function Base.getindex(
     M::Memory{L,T,N}, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
+    # TODO: this is wrong
     _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
     return getindex(M.array, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides))
 end

@@ -38,7 +38,7 @@
         # N.B.: Notice the difference in the plurality of the `weights` field ...
         # In the OneDNN code, we try to stay with the plural version since that's what the
         # oneDNN source code generally does.
-        @test isapprox(grads_jl[1].weight, transpose(OneDNN.typed(grads_dnnl[1].weights)))
+        @test isapprox(grads_jl[1].weight, transpose(OneDNN.materialize(OneDNN.typed(grads_dnnl[1].weights))))
         @test isapprox(grads_jl[1].bias, OneDNN.typed(grads_dnnl[1].bias))
         @test isapprox(grads_jl[2], OneDNN.typed(grads_dnnl[2]))
         @inferred back_dnnl(DY)
