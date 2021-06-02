@@ -1,18 +1,75 @@
-url = """
-https://github.com/oneapi-src/oneDNN/releases/download/v1.5/dnnl_lnx_1.5.0_cpu_gomp.tgz
-"""
+# url = """
+# https://github.com/oneapi-src/oneDNN/releases/download/v1.5/dnnl_lnx_1.5.0_cpu_gomp.tgz
+# """
+#
+# local_tarball = "dnnl.tgz"
+# local_dir = "dnnl"
+#
+# if !ispath(local_tarball)
+#     download(url, local_tarball)
+#     run(`tar -xvf $localpath`)
+# end
+#
+# if !ispath(local_dir)
+#     mv("dnnl_lnx_1.5.0_cpu_gomp", "dnnl")
+# end
 
-local_tarball = "dnnl.tgz"
-local_dir = "dnnl"
+#####
+##### threadpool
+#####
 
-if !ispath(local_tarball)
-    download(url, local_tarball)
-    run(`tar -xvf $localpath`)
-end
+import CxxWrap
 
-if !ispath(local_dir)
-    mv("dnnl_lnx_1.5.0_cpu_gomp", "dnnl")
-end
+# Paths for linking
+cxxhome = CxxWrap.prefix_path()
+juliahome = dirname(Base.Sys.BINDIR)
+dnnlhome = joinpath(@__DIR__, "dnnl")
+
+# Use Clang since it seems to get along better with Julia
+cxx = "clang++"
+
+cxxflags = [
+    "-g",
+    "-O3",
+    "-Wall",
+    "-fPIC",
+    "-std=c++17",
+    "-DPCM_SILENT",
+    "-DJULIA_ENABLE_THREADING",
+    "-Dexcept_EXPORTS",
+    # Surpress some warnings from Cxx
+    "-Wno-unused-variable",
+    "-Wno-unused-lambda-capture",
+]
+
+includes = [
+    "-I$(joinpath(cxxhome, "include"))",
+    "-I$(joinpath(juliahome, "include", "julia"))",
+    "-I$(joinpath(dnnlhome, "include"))",
+]
+
+loadflags = [
+    # Linking flags for Julia
+    "-L$(joinpath(juliahome, "lib"))",
+    "-Wl,--export-dynamic",
+    "-Wl,-rpath,$(joinpath(juliahome, "lib"))",
+    "-ljulia",
+    # Linking Flags for CxxWrap
+    "-L$(joinpath(cxxhome, "lib"))",
+    "-Wl,-rpath,$(joinpath(cxxhome, "lib"))",
+    "-lcxxwrap_julia",
+    # # Linking Flags for nGraph
+    # "-L$(joinpath(ngraphhome, "lib"))",
+    # "-Wl,-rpath,$(joinpath(ngraphhome, "lib"))",
+    # "-lngraph",
+]
+
+src = joinpath(@__DIR__, "threadpool.cpp")
+so = joinpath(@__DIR__, "libthreadpool.so")
+
+cmd = `$cxx $cxxflags $includes -shared $src -lpthread -o $so $loadflags`
+@show cmd
+run(cmd)
 
 # #####
 # ##### Debug Build

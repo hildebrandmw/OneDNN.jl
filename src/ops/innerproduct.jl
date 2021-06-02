@@ -25,18 +25,14 @@ function innerproduct(
         # Convert if needed.
         src = _src
         if isany(src_desc)
-            src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_src_md)
-            if src_desc != src_desc_opt
-                src = reorder(src_desc_opt, src)
-            end
+            src = maybe_reorder(primitive_descriptor, src, Lib.dnnl_query_src_md)
         end
 
         weights = _weights
         if isany(weights_desc)
-            weights_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_weights_md)
-            if weights_desc != weights_desc_opt
-                weights = reorder(weights_desc_opt, weights)
-            end
+            weights = maybe_reorder(
+                primitive_descriptor, weights, Lib.dnnl_query_weights_md
+            )
         end
 
         dst = similar(
@@ -51,17 +47,20 @@ function innerproduct(
 end
 
 function innerproduct_backward_data(
-    diff_src_dims::NTuple, weights::Memory, diff_dst::Memory
+    diff_src_dims::NTuple, _weights::Memory, _diff_dst::Memory
 )
-    diff_src_desc = memorydesc(eltype(diff_dst), diff_src_dims, dnnl_format_any())
+    diff_src_desc = memorydesc(eltype(_diff_dst), diff_src_dims, dnnl_format_any())
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_backward_data_desc_init(
-        inner_product_desc, diff_src_desc, weights, diff_dst
+        inner_product_desc, diff_src_desc, toany(_weights), toany(_diff_dst)
     )
 
     return temp_primitive(
         inner_product_desc, noattributes(), global_engine(), noforward()
     ) do primitive, primitive_descriptor
+        weights = maybe_reorder(primitive_descriptor, _weights, Lib.dnnl_query_weights_md)
+        diff_dst = maybe_reorder(primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md)
+
         diff_src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_src_md)
         diff_src = similar(diff_dst, eltype(diff_dst), diff_src_dims, diff_src_desc_opt)
         execute!(primitive, @dnnl_args diff_src weights diff_dst)
@@ -70,26 +69,38 @@ function innerproduct_backward_data(
 end
 
 function innerproduct_backward_weights(
-    diff_weights_dims::NTuple, src::Memory, diff_dst::Memory
+    diff_weights_dims::NTuple, _src::Memory, _diff_dst::Memory
 )
     diff_bias_dims = (diff_weights_dims[2],)
-    diff_weights_desc = memorydesc(eltype(src), diff_weights_dims, dnnl_format_any())
-    diff_bias_desc = memorydesc(eltype(src), diff_bias_dims, Lib.dnnl_a)
+    diff_weights_desc = memorydesc(eltype(_src), diff_weights_dims, dnnl_format_any())
+    diff_bias_desc = memorydesc(eltype(_src), diff_bias_dims, Lib.dnnl_a)
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
 
     @apicall dnnl_inner_product_backward_weights_desc_init(
-        inner_product_desc, src, diff_weights_desc, diff_bias_desc, diff_dst
+        inner_product_desc,
+        toany(_src),
+        diff_weights_desc,
+        diff_bias_desc,
+        toany(_diff_dst),
     )
 
     return temp_primitive(
         inner_product_desc, noattributes(), global_engine(), noforward()
     ) do primitive, primitive_descriptor
+        # Maybe convert arguments
+        src = maybe_reorder(primitive_descriptor, _src, Lib.dnnl_query_src_md)
+        diff_dst = maybe_reorder(
+            primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md
+        )
+
+        # Materialize destinations
         diff_weights_desc_opt = query_md(
             primitive_descriptor, Lib.dnnl_query_diff_weights_md
         )
         diff_weights = similar(
             diff_dst, eltype(diff_dst), diff_weights_dims, diff_weights_desc_opt
         )
+
         diff_bias = similar(diff_dst, eltype(diff_dst), diff_bias_dims, diff_bias_desc)
         execute!(primitive, @dnnl_args diff_weights diff_bias src diff_dst)
         return (diff_weights, diff_bias)
@@ -139,6 +150,7 @@ function (dense::Dense)(_src, fuse_activation = true)
             dense.weights,
             dense.bias;
             attributes = attributes,
+            src_desc = toany(memorydesc(src)),
             weights_desc = toany(memorydesc(dense.weights)),
             callback = callback,
         )

@@ -19,6 +19,7 @@ using Zygote: Zygote
 
 # Include auto-generated wrapper for OneDNN
 include("lib/lib.jl")
+include("wrap.jl")
 include("tiledarrays.jl")
 using .TiledArrays: TiledArrays
 include("utils.jl")
@@ -36,11 +37,35 @@ include("ops/innerproduct.jl")
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()
 const GLOBAL_STREAM = Ref{Stream}()
+const GLOBAL_THREADPOOL = Ref{Any}()
+
+_get_in_parallel() = (Threads.threadid() != 1)
+function _parallel_for(n::Cint, f::Ptr{Cvoid})
+    Threads.@threads for i in Base.OneTo(n)
+        Wrap.call_opaque(f, i-1, n)
+    end
+end
 
 # Initialize the default Engine and Stream.
 function __init__()
     GLOBAL_ENGINE[] = Engine(Lib.dnnl_cpu)
-    return GLOBAL_STREAM[] = Stream(GLOBAL_ENGINE[])
+
+    # Create a thread pool.
+    threadpool = Wrap.construct_threadpool(
+        @cfunction(_get_in_parallel, Bool, ()),
+        @cfunction(_parallel_for, Cvoid, (Cint, Ptr{Cvoid})),
+        Threads.nthreads(),
+    )
+    GLOBAL_THREADPOOL[] = threadpool
+
+    stream = Stream()
+    @apicall dnnl_threadpool_interop_stream_create(
+        stream,
+        GLOBAL_ENGINE[],
+        threadpool.cpp_object,
+    )
+    GLOBAL_STREAM[] = stream
+    return nothing
 end
 
 global_engine() = GLOBAL_ENGINE[]

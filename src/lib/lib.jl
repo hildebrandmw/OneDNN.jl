@@ -15,5 +15,6 @@ Libdl.dlopen(dnnl, _flags)
 
 include("types.jl")
 include("dnnl.jl")
+include("dnnl_threadpool.jl")
 
 end # module

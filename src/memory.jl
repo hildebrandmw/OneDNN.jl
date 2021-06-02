@@ -169,6 +169,8 @@ end
 layout(::Memory{L}) where {L} = L
 layout(x::Opaque) = x
 
+toany(x::Memory) = toany(memorydesc(x))
+
 logicalsize(x::Memory) = size(x)
 Base.strides(x::Memory{L,T,N}) where {L,T,N} = strides(memorydesc(x), Val(N))
 

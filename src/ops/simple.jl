@@ -226,3 +226,18 @@ binary_forward(::typeof(-)) = Lib.dnnl_binary_sub
 binary_forward(::typeof(/)) = Lib.dnnl_binary_div
 binary_forward(::typeof(max)) = Lib.dnnl_binary_max
 binary_forward(::typeof(min)) = Lib.dnnl_binary_min
+
+#####
+##### Optimized Format Conversion.
+#####
+
+function maybe_reorder(descriptor::PrimitiveDescriptor, x::Memory, key)
+    md = memorydesc(x)
+    md_opt = query_md(descriptor, key)
+
+    if md == md_opt
+        return x
+    end
+    return reorder(md_opt, x)
+end
+

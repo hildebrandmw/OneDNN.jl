@@ -16,7 +16,10 @@ mkpath(outpath)
 # We're just looking for `dnnl.h` and `dnnl_types.h`.
 const include_dir = joinpath(dirname(@__DIR__), "deps", "dnnl", "include")
 
-const onednn_headers = [joinpath(include_dir, "dnnl.h")]
+const onednn_headers = [
+    joinpath(include_dir, "dnnl.h"),
+    joinpath(include_dir, "dnnl_threadpool.h"),
+]
 
 # Includes for Clang.jl
 #
