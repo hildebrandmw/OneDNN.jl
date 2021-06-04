@@ -7,6 +7,7 @@ using LinearAlgebra: LinearAlgebra
 using ChainRulesCore: ChainRulesCore
 using Flux: Flux
 using MacroTools: MacroTools
+using Polyester: Polyester
 using Zygote: Zygote
 
 # # time how long some operations take
@@ -41,7 +42,8 @@ const GLOBAL_THREADPOOL = Ref{Any}()
 
 _get_in_parallel() = (Threads.threadid() != 1)
 function _parallel_for(n::Cint, f::Ptr{Cvoid})
-    Threads.@threads for i in Base.OneTo(n)
+    #Threads.@threads for i in Base.OneTo(n)
+    Polyester.@batch per=thread for i in Base.OneTo(n)
         Wrap.call_opaque(f, i-1, n)
     end
 end

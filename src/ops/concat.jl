@@ -65,7 +65,7 @@ function ChainRulesCore.rrule(::typeof(concat), A::Vector{T}, dim::Integer) wher
     function concat_pullback(Δ)
         f = Slicer(1, dim, materialize(Δ))
         δA = map(f, lengths)
-        return (ChainRulesCore.NO_FIELDS, δA, ChainRulesCore.DoesNotExist())
+        return (ChainRulesCore.NoTangent(), δA, ChainRulesCore.NoTangent())
     end
     return dst, concat_pullback
 end

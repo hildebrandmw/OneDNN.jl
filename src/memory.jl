@@ -218,7 +218,7 @@ _offset(x::Base.SubArray) = Base.first_index(x)
 Memory(M::Memory) = M
 
 function ChainRulesCore.rrule(::Type{<:Memory}, x)
-    return (Memory(x), Δ -> (ChainRulesCore.NO_FIELDS, Δ))
+    return (Memory(x), Δ -> (ChainRulesCore.NoTangent(), Δ))
 end
 
 # Get to the ultimate parent.
@@ -376,5 +376,5 @@ function ChainRulesCore.rrule(
     ::typeof(materialize), x, args::Vararg{Any,N}; kw...
 ) where {N}
     return materialize(x, args...; kw...),
-    Δ -> (ChainRulesCore.NO_FIELDS, Δ, ntuple(_ -> ChainRulesCore.DoesNotExist(), Val(N)))
+    Δ -> (ChainRulesCore.NoTangent(), Δ, ntuple(_ -> ChainRulesCore.NoTangent()(), Val(N)))
 end

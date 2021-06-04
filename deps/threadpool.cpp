@@ -7,15 +7,16 @@
 #include "jlcxx/stl.hpp"
 
 // Allow std::function to be called from Julia
+typedef std::function<void(int,int)> _dnnl_callback;
+
 class Opaque {
   public:
-    Opaque(const std::function<void(int,int)>& fn) : fn(fn) {}
-    const std::function<void(int,int)>& fn;
+    Opaque(const _dnnl_callback& fn) : fn(fn) {}
+    const _dnnl_callback& fn;
 };
 
 typedef Opaque* dnnl_callback;
 typedef std::function<void(int,dnnl_callback)> julia_callback;
-
 
 class threadpool : public dnnl::threadpool_interop::threadpool_iface {
   private:

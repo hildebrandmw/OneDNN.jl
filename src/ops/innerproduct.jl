@@ -187,9 +187,9 @@ function rrule_fused(dense::T, _src, _fuse_activation) where {T}
             diff_weights, diff_bias
         ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
         return (
-            ChainRulesCore.Composite{T}(; weights = diff_weights, bias = diff_bias),
+            ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
             diff_src,
-            ChainRulesCore.DoesNotExist(),
+            ChainRulesCore.NoTangent(),
         )
     end
     return dst, pullback
@@ -209,9 +209,9 @@ function rrule_unfused(dense::T, _src, _fuse_activation) where {T}
         ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
 
         return (
-            ChainRulesCore.Composite{T}(; weights = diff_weights, bias = diff_bias),
+            ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
             diff_src,
-            ChainRulesCore.DoesNotExist(),
+            ChainRulesCore.NoTangent(),
         )
     end
     return dst, pullback

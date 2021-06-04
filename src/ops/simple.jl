@@ -28,7 +28,7 @@ function ChainRulesCore.rrule(
 )
     to = reorder(desc, from, format)
     pullback = function reorder_pullback(Δ)
-        return (ChainRules.NO_FIELDS, ChainRules.DoesNotExist(), Δ, ChainRules.DoesNotExist())
+        return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ, ChainRules.NoTangent())
     end
     return to, pullback
 end
@@ -178,7 +178,7 @@ function ChainRulesCore.rrule(::typeof(eltwise), f::F, from::Memory) where {F}
     data = dst_for_bwd(f) ? to : from
     pullback = function eltwise_pullback(Δ)
         diff_from = eltwise_backward(f, Δ, data)
-        return (ChainRulesCore.NO_FIELDS, ChainRulesCore.NO_FIELDS, diff_from)
+        return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), diff_from)
     end
     return to, pullback
 end
