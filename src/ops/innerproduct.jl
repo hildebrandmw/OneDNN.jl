@@ -14,7 +14,7 @@ function innerproduct(
     dst_desc = memorydesc(eltype(_src), dst_dims, dnnl_format_any())
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_forward_desc_init(
-        inner_product_desc, kind, _src, _weights, bias, dst_desc
+        inner_product_desc, kind, src_desc, weights_desc, bias, dst_desc
     )
 
     return temp_primitive(
@@ -22,6 +22,7 @@ function innerproduct(
     ) do primitive, primitive_descriptor
         # Maybe the caller wants to know what the optimal weights format is.
         callback(primitive, primitive_descriptor)
+
         # Convert if needed.
         src = _src
         if isany(src_desc)
@@ -155,7 +156,7 @@ function (dense::Dense)(_src, fuse_activation = true)
             callback = callback,
         )
         if dense.optimized_weights_desc != memorydesc(dense.weights)
-            dense.weights = reorder(dense.weights_desc, dense.weights)
+            dense.weights = reorder(dense.optimized_weights_desc, dense.weights)
         end
         dense.optimized_weights = true
         return dst

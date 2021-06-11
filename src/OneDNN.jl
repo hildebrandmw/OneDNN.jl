@@ -43,8 +43,8 @@ const GLOBAL_THREADPOOL = Ref{Any}()
 _get_in_parallel() = (Threads.threadid() != 1)
 function _parallel_for(n::Cint, f::Ptr{Cvoid})
     #Threads.@threads for i in Base.OneTo(n)
-    Polyester.@batch per=thread for i in Base.OneTo(n)
-        Wrap.call_opaque(f, i-1, n)
+    Polyester.@batch per = thread for i in Base.OneTo(n)
+        Wrap.call_opaque(f, i - 1, n)
     end
 end
 
@@ -62,9 +62,7 @@ function __init__()
 
     stream = Stream()
     @apicall dnnl_threadpool_interop_stream_create(
-        stream,
-        GLOBAL_ENGINE[],
-        threadpool.cpp_object,
+        stream, GLOBAL_ENGINE[], threadpool.cpp_object
     )
     GLOBAL_STREAM[] = stream
     return nothing
@@ -87,15 +85,14 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
         return nothing
     end
 
-    xa = reshape(parent(x), size(x))
-    Δa = reshape(parent(Δ), size(Δ))
-
+    xa = vec(parent(x))
+    Δa = vec(parent(Δ))
     xa .= xa .- (o.eta .* Δa)
     return nothing
 end
 
 function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-    x .= x .- (o.eta .* Δ)
+    return x .= x .- (o.eta .* Δ)
 end
 
 # # # Apply the negative here so we can just add together in `update!`.
@@ -106,5 +103,45 @@ end
 # # function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
 # #     return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
 # end
+
+function setup()
+    diff_weights_dims = (1024, 1024)
+    diff_bias_dims = (1024,)
+    diff_dst_dims = (1024, 2^15)
+    src_dims = (1024, 2^15)
+
+    diff_dst = OneDNN.Memory(randn(Float32, diff_dst_dims))
+    src = OneDNN.Memory(randn(Float32, src_dims))
+
+    diff_bias_desc = memorydesc(Float32, diff_bias_dims, Lib.dnnl_a)
+    inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
+    @apicall dnnl_inner_product_backward_weights_desc_init(
+        inner_product_desc,
+        memorydesc(Float32, src_dims, dnnl_format_any()),
+        memorydesc(Float32, diff_weights_dims, dnnl_format_any()),
+        diff_bias_desc,
+        memorydesc(Float32, diff_dst_dims, dnnl_format_any()),
+    )
+
+    primitive_desc = __PrimitiveDescriptor(
+        inner_product_desc, noattributes(), global_engine(), noforward()
+    )
+    primitive = __Primitive(primitive_desc)
+
+    diff_weights_desc_opt = query_md(primitive_desc, Lib.dnnl_query_diff_weights_md)
+    diff_weights = similar(
+        diff_dst, eltype(diff_dst), diff_weights_dims, diff_weights_desc_opt
+    )
+
+    diff_bias = similar(diff_dst, eltype(diff_dst), diff_bias_dims, diff_bias_desc)
+    return (;
+        primitive,
+        primitive_desc,
+        src,
+        diff_bias,
+        diff_weights,
+        diff_dst,
+    )
+end
 
 end # module

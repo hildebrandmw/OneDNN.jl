@@ -241,12 +241,15 @@ end
 Base.size(M::Memory) = M.logicalsize
 Base.eltype(M::Memory{L,T}) where {L,T} = T
 
+striptiles(_::TiledArrays.Tile, x...) = striptiles(x...)
+striptiles(x::Int, y...) = (x, y...)
+
 Base.@propagate_inbounds function Base.getindex(
     M::Memory{L,T,N}, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
     # TODO: this is wrong
-    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
+    _strides = ntuple(i -> strides(M)[invperm(striptiles(L...))[i]], Val(N))
     return getindex(M.array, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides))
 end
 
@@ -258,7 +261,7 @@ Base.@propagate_inbounds function Base.setindex!(
     M::Memory{L,T,N}, v, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
-    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
+    _strides = ntuple(i -> strides(M)[invperm(striptiles(L...))[i]], Val(N))
     return setindex!(
         M.array, v, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides)
     )
