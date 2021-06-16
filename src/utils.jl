@@ -304,7 +304,10 @@ function execute!(primitive::Primitive, args; wait = true)
     return nothing
 end
 
+# Automatically apply recursively to tuples.
 kernel_exit_hook(x) = x
+kernel_exit_hook(x::Tuple) = map(kernel_exit_hook, x)
+
 function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
     desc = __PrimitiveDescriptor(args...)
     primitive = __Primitive(desc)

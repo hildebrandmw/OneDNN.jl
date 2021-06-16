@@ -4,7 +4,8 @@
 
 function reorder(memorydesc::MemoryDesc, from::Memory, format = Opaque)
     to = similar(from, eltype(from), size(from), memorydesc, format)
-    return reorder!(to, from)
+    reorder!(to, from)
+    return kernel_exit_hook(to)
 end
 
 function reorder!(to::Memory, from::Memory, attributes = noattributes())
@@ -44,7 +45,8 @@ function eltwise(
 )
     # Keep similar format to source
     dst = similar(src)
-    return eltwise!(dst, src, kind, alpha, beta)
+    eltwise!(dst, src, kind, alpha, beta)
+    return kernel_exit_hook(dst)
 end
 
 function eltwise!(
@@ -86,7 +88,8 @@ function eltwise_backward(
     use_dst_for_bwd::Bool = false,
 )
     diff_src = similar(diff_data)
-    return eltwise_backward!(diff_src, diff_data, data, kind, alpha, beta, use_dst_for_bwd)
+    eltwise_backward!(diff_src, diff_data, data, kind, alpha, beta, use_dst_for_bwd)
+    return kernel_exit_hook(diff_src)
 end
 
 function eltwise_backward!(
@@ -194,7 +197,8 @@ function binary(f::F, src_0::Memory, src_1::Memory) where {F}
 end
 function binary(src_0::Memory, src_1::Memory, kind)
     dst = similar(src_0)
-    return binary!(dst, src_0, src_1, kind)
+    binary!(dst, src_0, src_1, kind)
+    return kernel_exit_hook(dst)
 end
 
 function binary!(f::F, dst::Memory, src_0::Memory, src_1::Memory) where {F}

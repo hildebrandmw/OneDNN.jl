@@ -136,11 +136,43 @@ layout(::Val{N}) where {N} = ntuple(identity, Val(N))
 layout(::Array{T,N}) where {T,N} = layout(Val(N))
 layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 
+mutable struct MemoryPtr
+    handle::Lib.dnnl_memory_t
+    MemoryPtr() = new(Lib.dnnl_memory_t())
+end
+
+function MemoryPtr(A::AbstractArray, desc = memorydesc(A))
+    return MemoryPtr(convert(Ptr{Nothing}, pointer(A)), desc)
+end
+
+function MemoryPtr(ptr::Ptr{Nothing}, desc::MemoryDesc)
+    memory = MemoryPtr()
+    @apicall dnnl_memory_create(memory, desc, global_engine(), ptr)
+    attach_finalizer!(memory)
+    return memory
+end
+
+function attach_finalizer!(memory::MemoryPtr)
+    finalizer(memory) do x
+        @apicall dnnl_memory_destroy(x)
+    end
+end
+
+Base.cconvert(::Type{Lib.dnnl_memory_t}, memory::MemoryPtr) = memory.handle
+function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_t}}, memory::MemoryPtr)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_memory_t}, Base.pointer_from_objref(memory))
+end
+
+@inline function Base.convert(
+    ::Type{T}, memory::MemoryPtr
+) where {T<:Union{Lib.dnnl_memory_t,Ptr{Lib.dnnl_memory_t}}}
+    return Base.cconvert(T, memory)
+end
+
 # Often, we don't want to specialize on the layout of the array, instead allowing oneDNN
 # to work on its own
 struct Opaque end
-
-mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
+struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
     offset::Int
@@ -155,28 +187,20 @@ mutable struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     logicalsize::NTuple{N,Int}
 
     # Memory object from DNNL
-    memory::Lib.dnnl_memory_t
-
-    # Inner constructor to ensure finalizers.
-    function Memory{L}(
-        array::A, offset, dims::NTuple{N,Int}, memory::Lib.dnnl_memory_t
-    ) where {L,T,N,A<:AbstractArray{T}}
-        object = new{L,T,N,A}(array, convert(Int64, offset), dims, memory)
-        finalizer(object) do obj
-            Lib.dnnl_memory_destroy(obj.memory)
-        end
-        return object
-    end
+    memory::MemoryPtr
 end
+
+function Memory{L}(
+    array::A, offset, dims::NTuple{N,Int}, memory::MemoryPtr
+) where {L,T,N,A<:AbstractArray{T}}
+    return Memory{L,T,N,A}(array, convert(Int64, offset), dims, memory)
+end
+
 layout(::Memory{L}) where {L} = L
 layout(x::Opaque) = x
 
-# TODO: This is kind of a sloppy definition ...
 function Base.convert(::Type{Memory{L,T,N,A}}, x::Memory{L,T,N,B}) where {L,T,N,A,B}
-    _array = x.array
-    return Memory{L}(
-        convert(A, _array), x.offset, x.logicalsize, creatememory(_array, memorydesc(x))
-    )
+    return Memory{L}(convert(A, x.array), x.offset, x.logicalsize, x.memory)
 end
 
 toany(x::Memory) = toany(memorydesc(x))
@@ -197,15 +221,13 @@ function setptr!(x::Memory{<:Any,T}, context::AccessContext = Reading()) where {
     @apicall dnnl_memory_set_data_handle_v2(x.memory, ptr, global_stream())
 end
 
-function Base.cconvert(::Type{Lib.dnnl_memory_t}, x::Memory)
+function Base.cconvert(
+    ::Type{T}, x::Memory
+) where {T<:Union{Lib.dnnl_memory_t,Ptr{Lib.dnnl_memory_t}}}
     setptr!(x)
-    return x.memory
+    return Base.cconvert(T, x.memory)
 end
 
-function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_t}}, x::Memory)
-    setptr!(x)
-    return Ptr{Lib.dnnl_memory_t}(Base.pointer_from_objref(x) + fieldoffset(typeof(x), 3))
-end
 Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::Memory) = memorydesc_ptr(x)
 
 # For constructing DNNL arguments.
@@ -219,7 +241,7 @@ end
 # `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
 # cause down-stream type instabilities.
 function Memory(A::AbstractArray)
-    return Memory{Opaque}(ancestor(A), _offset(A), size(A), creatememory(A))
+    return Memory{Opaque}(ancestor(A), _offset(A), size(A), MemoryPtr(A))
 end
 
 _offset(::AbstractArray) = one(Int64)
@@ -235,16 +257,10 @@ end
 ancestor(x::Array) = x
 ancestor(x) = ancestor(parent(x))
 
-function creatememory(A::AbstractArray, desc = memorydesc(A))
-    memory = Ref{Lib.dnnl_memory_t}()
-    @apicall dnnl_memory_create(memory, desc, global_engine(), A)
-    return memory[]
-end
-
 function typed(M::Memory{Opaque})
     A = parent(M)
     desc = memorydesc(M)
-    return Memory{layout(desc)}(A, M.offset, size(M), creatememory(A, desc))
+    return Memory{layout(desc)}(A, M.offset, size(M), MemoryPtr(A, desc))
 end
 
 # Convenience method for creating destination memories from a source memory.
@@ -300,7 +316,7 @@ function Base.adjoint(M::Memory{Opaque,T,2}) where {T}
 
     reversed_dims = reverse(dims)
     desc = memorydesc(T, reversed_dims, reverse(strides))
-    memory = creatememory(parent(M), desc)
+    memory = MemoryPtr(parent(M), desc)
     return Memory{Opaque}(parent(M), M.offset, reversed_dims, memory)
 end
 
@@ -311,7 +327,7 @@ function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N
     strides_permuted = unsafe_permute(strides, perm)
 
     desc = memorydesc(T, dims_permuted, strides_permuted)
-    memory = creatememory(parent(M), desc)
+    memory = MemoryPtr(parent(M), desc)
     return Memory{Opaque}(parent(M), M.offset, dims_permuted, memory)
 end
 
@@ -349,7 +365,7 @@ function Base.similar(
     out = similar(M.array, T, padded_dims)
 
     # Since we specifically created this array, the offset will always start atone.
-    return Memory{_rm_val(format)}(out, 1, dims, creatememory(out, desc))
+    return Memory{_rm_val(format)}(out, 1, dims, MemoryPtr(out, desc))
 end
 
 _rm_val(x) = x
