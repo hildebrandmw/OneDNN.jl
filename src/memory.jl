@@ -20,6 +20,8 @@ dnnl_convert(::Type{T}) where {T} = dnnl_type(T)
 function dnnl_dims(x::NTuple{N,Int64}) where {N}
     # Need to reverse the order of dimensions because C/C++ is row-major while Julia
     # is column major.
+    #
+    # This leads to all kinds of translation schenanigans ...
     f(i) = (i <= length(x)) ? Lib.dnnl_dim_t(x[i]) : zero(Lib.dnnl_dim_t)
     return ntuple(i -> f(i), Val(Lib.DNNL_MAX_NDIMS))
 end
@@ -169,6 +171,14 @@ end
 layout(::Memory{L}) where {L} = L
 layout(x::Opaque) = x
 
+# TODO: This is kind of a sloppy definition ...
+function Base.convert(::Type{Memory{L,T,N,A}}, x::Memory{L,T,N,B}) where {L,T,N,A,B}
+    _array = x.array
+    return Memory{L}(
+        convert(A, _array), x.offset, x.logicalsize, creatememory(_array, memorydesc(x))
+    )
+end
+
 toany(x::Memory) = toany(memorydesc(x))
 
 logicalsize(x::Memory) = size(x)
@@ -181,10 +191,10 @@ Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x)
 Base.show(io::IO, ::MIME"text/plain", x::Memory{Opaque}) = show(io, x)
 
 # for creating OneDNN arguments
-function setptr!(x::Memory{<:Any,T}) where {T}
-    @apicall dnnl_memory_set_data_handle_v2(
-        x.memory, pointer(x.array, x.offset), global_stream()
-    )
+@inline access_pointer(x, offset, context) = pointer(x, offset)
+function setptr!(x::Memory{<:Any,T}, context::AccessContext = Reading()) where {T}
+    ptr = access_pointer(x.array, x.offset, context)
+    @apicall dnnl_memory_set_data_handle_v2(x.memory, ptr, global_stream())
 end
 
 function Base.cconvert(::Type{Lib.dnnl_memory_t}, x::Memory)
@@ -199,8 +209,8 @@ end
 Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::Memory) = memorydesc_ptr(x)
 
 # For constructing DNNL arguments.
-function dnnl_exec_arg(x::Memory)
-    setptr!(x)
+function dnnl_exec_arg(x::Memory, context::AccessContext = Reading())
+    setptr!(x, context)
     return x.memory
 end
 

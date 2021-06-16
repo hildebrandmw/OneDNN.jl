@@ -79,8 +79,16 @@ Base.resize!(x::Arguments{<:AbstractVector}, i) = resize!(x.args, i)
 Base.setindex!(x::Arguments{<:AbstractVector}, v, i::Integer) = setindex!(x.args, v, i)
 Base.lastindex(x::Arguments) = lastindex(x.args)
 
-dnnl_arg(x, y) = Lib.dnnl_exec_arg_t(x, dnnl_exec_arg(y))
-function dnnl_exec_arg end
+abstract type AccessContext end
+struct Reading <: AccessContext end
+struct Writing <: AccessContext end
+
+function dnnl_arg(x, y, context::AccessContext = Reading())
+    return Lib.dnnl_exec_arg_t(x, dnnl_exec_arg(y, context))
+end
+function dnnl_exec_arg(y::T, context) where {T}
+    error("Define `dnnl_exec_arg` for type $(T)!")
+end
 
 # In the macro below, add support for converting expressions like `:(a.b)` to just
 # plain `b`
@@ -106,10 +114,39 @@ getsym(x::Expr) = getsym(last(x.args))
 #
 # This requires that functions using this macro follow the same naming conventions as the
 # OneDNN C-API, but that's probably good practiced anyways.
+
+const _R = :(Reading())
+const _W = :(Writing())
+const CONTEXT_MAP = [
+    "DIFF_SRC"      => _W,
+    "DIFF_WEIGHTS"  => _W,
+    "DIFF_BIAS"     => _W,
+    "DIFF_DST"      => _R,
+    "SRC"           => _R,
+    "WEIGHTS"       => _R,
+    "BIAS"          => _R,
+    "DST"           => _W,
+    "FROM"          => _R,
+    "TO"            => _W,
+]
+
 macro dnnl_args(syms...)
     exprs = map(syms) do sym
-        dnnl_arg_enum = Symbol("DNNL_ARG_$(uppercase(getsym(sym)))")
-        return :(dnnl_arg(Lib.$dnnl_arg_enum, $(esc(sym))))
+        dnnl_arg_enum = "DNNL_ARG_$(uppercase(getsym(sym)))"
+        # Determing the context
+        context = nothing
+        for (str, quot) in CONTEXT_MAP
+            if occursin(str, dnnl_arg_enum)
+                context = quot
+                break
+            end
+        end
+
+        if context === nothing
+            error("Unknown DNNL Argument: $dnnl_arg_enum")
+        end
+
+        return :(dnnl_arg(Lib.$(Symbol(dnnl_arg_enum)), $(esc(sym)), $context))
     end
     return :(Arguments($(exprs...)))
 end
@@ -267,13 +304,14 @@ function execute!(primitive::Primitive, args; wait = true)
     return nothing
 end
 
+kernel_exit_hook(x) = x
 function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
     desc = __PrimitiveDescriptor(args...)
     primitive = __Primitive(desc)
     ret = f(primitive, desc)
     destroy(primitive)
     destroy(desc)
-    return ret
+    return kernel_exit_hook(ret)
 end
 
 #####
