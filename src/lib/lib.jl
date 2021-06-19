@@ -10,11 +10,11 @@ const LIBDIR = joinpath(USRDIR, "lib")
 
 const _flags = Libdl.RTLD_LAZY | Libdl.RTLD_GLOBAL
 
-const dnnl = joinpath(LIBDIR, "libdnnl.so")
-Libdl.dlopen(dnnl, _flags)
+const libdnnl = joinpath(LIBDIR, "libdnnl.so")
+Libdl.dlopen(libdnnl, _flags)
 
-include("types.jl")
+#include("types.jl")
 include("dnnl.jl")
-include("dnnl_threadpool.jl")
+#include("dnnl_threadpool.jl")
 
 end # module

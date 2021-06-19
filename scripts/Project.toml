@@ -1,3 +1,4 @@
 [deps]
 Clang = "40e3b903-d033-50b4-a0cc-940c62c95e31"
+Clang_jll = "0ee61d77-7f21-5576-8119-9fcc46b10100"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"

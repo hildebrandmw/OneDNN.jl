@@ -4,13 +4,15 @@
 # https://github.com/SciML/Sundials.jl/blob/master/scripts/wrap_sundials.jl
 
 using Clang
+using Clang.Generators
+using Clang.LibClang.Clang_jll
 using MacroTools
 
 # This is where the wrapper gets generated.
 #
 # If it looks Okay, move into the `src` folder.
-const outpath = joinpath(normpath(joinpath(@__DIR__, "wrapped_api")))
-mkpath(outpath)
+const outpath = joinpath(@__DIR__, "dnnl.jl")
+#mkpath(outpath)
 
 # Find the relevant headers.
 # We're just looking for `dnnl.h` and `dnnl_types.h`.
@@ -21,55 +23,44 @@ const onednn_headers = [
     joinpath(include_dir, "dnnl_threadpool.h"),
 ]
 
-# Includes for Clang.jl
-#
-# Why does `CLANG_INCLUDES` not exist?
-#const clang_includes = [CLANG_INCLUDES]
-#const clang_includes = String[]
+args = get_default_args()
+push!(args, "-I$include_dir")
 
-function wrap_header(top_hdr::AbstractString, cursor_header::AbstractString)
-    if occursin("dnnl", cursor_header)
-        return true
-    end
-    return false
-end
+options = Dict("general" => Dict(
+    "output_file_path" => outpath,
+    "library_name" => "libdnnl",
+    "use_julia_native_enum_type" => false,
+    "use_deterministic_symbol" => true,
+))
 
-const REMOVE_MACROS = ["DNNL_RUNTIME_DIM_VAL", "DNNL_RUNTIME_S32_VAL", "DNNL_MEMORY_NONE"]
+ctx = create_context(onednn_headers, args, options)
 
-function wrap_cursor(cursor_name::AbstractString, cursor)
-    # Snipe macros that don't translate well.
-    if isa(cursor, Clang.CLMacroDefinition)
-        return !in(cursor_name, REMOVE_MACROS)
-    end
-    return true
-end
-
-#####
-##### Context Creation
-#####
-
-const context = init(;
-    common_file = joinpath(outpath, "types.jl"),
-    clang_diagnostics = true,
-    clang_includes = [include_dir],
-    header_wrapped = wrap_header,
-    cursor_wrapped = wrap_cursor,
-)
-context.headers = onednn_headers
+# Build without printing so we can do custom rewriting.
+build!(ctx, BUILDSTAGE_NO_PRINTING)
 
 # For rewriting purposes, we need to intercept all entries for
 # `dnnl_dims_t` and replace them with `Ptr{dnnl_dim_t}`.
+custom_pointer_types = [
+    :dnnl_memory,
+    :dnnl_engine,
+    :dnnl_primitive_desc_iterator,
+    :dnnl_primitive_desc,
+    :dnnl_primitive_attr,
+    :dnnl_post_ops,
+    :dnnl_primitive,
+    :dnnl_stream,
+]
 
-wrap_onednn_api(notexpr) = Any[notexpr]
-function wrap_onednn_api(expr::Expr)
-    if expr.head == :const
-        # Replace objects that Clang turns into "Cvoid" into singleton structs.
-        # This provides a bit more type-safety when calling the C API.
-        # Also need to make "unsafe_convert" an error to avoid pointers swapping types
-        # accidentally.
-        if MacroTools.@capture(expr, const name_ = Cvoid)
+rewrite(notexpr) = Any[notexpr]
+function rewrite(expr::Expr)
+    # Replace objects that Clang turns into "Cvoid" into singleton structs.
+    # This provides a bit more type-safety when calling the C API.
+    # Also need to make "unsafe_convert" an error to avoid pointers swapping types
+    # accidentally.
+    if MacroTools.@capture(expr, mutable struct name_ end)
+        if in(name, custom_pointer_types)
             expr = quote
-                struct $name end
+                $expr
 
                 function Base.cconvert(::Type{Ptr{$name}}, x::Ptr{$name})
                     return x
@@ -84,33 +75,31 @@ function wrap_onednn_api(expr::Expr)
                 function Base.cconvert(::Type{Ptr{Ptr{$name}}}, x::Ptr)
                     return error("Refusing to convert $(typeof(x)) to a Ptr{Ptr{$($name)}}!")
                 end
-            end
-            # Remove line number nodes
-            expr = MacroTools.prewalk(MacroTools.rmlines, expr)
-            return [expr]
+            end |> MacroTools.prettify
         end
+        return [expr]
 
-        # Check if this is a ccall
+    # Check if this is a ccall
     elseif expr.head == :function
-        # Handle special cases.
-        #
-        # For some reason, the argument to this method is not captured.
-        # I have no idea why ...
-        if expr.args[1].args[1] == :dnnl_memory_desc_get_size
-            expr = :(
-                function dnnl_memory_desc_get_size(memory_desc)
-                    return ccall(
-                        (:dnnl_memory_desc_get_size, dnnl),
-                        Csize_t,
-                        (Ptr{dnnl_memory_desc_t},),
-                        memory_desc,
-                    )
-                end
-            )
-            # Remove line number nodes
-            expr = MacroTools.prewalk(MacroTools.rmlines, expr)
-            return [expr]
-        end
+        # # Handle special cases.
+        # #
+        # # For some reason, the argument to this method is not captured.
+        # # I have no idea why ...
+        # if expr.args[1].args[1] == :dnnl_memory_desc_get_size
+        #     expr = :(
+        #         function dnnl_memory_desc_get_size(memory_desc)
+        #             return ccall(
+        #                 (:dnnl_memory_desc_get_size, dnnl),
+        #                 Csize_t,
+        #                 (Ptr{dnnl_memory_desc_t},),
+        #                 memory_desc,
+        #             )
+        #         end
+        #     )
+        #     # Remove line number nodes
+        #     expr = MacroTools.prewalk(MacroTools.rmlines, expr)
+        #     return [expr]
+        # end
 
         # use the powerful macrotools to transform `dnnl_dims_t` to `ptr{dnnl_dim_t}`.
         function_body = expr.args[2]
@@ -121,18 +110,62 @@ function wrap_onednn_api(expr::Expr)
                 return x
             end
         end
+    elseif expr.head == :const
+        expr = MacroTools.postwalk(expr) do ex
+            if ex == :INT64_MIN
+                return :(typemin(Int64))
+            elseif ex == :size_t
+                return :unsigned
+            # Delete this definition since it depends on something that gets skipped.
+            elseif in(ex, (:DNNL_RUNTIME_S32_VAL_REP, :NULL))
+                return 0
+            end
+            return ex
+        end
     end
     return [expr]
 end
 
-context.rewriter = function (exprs)
-    mod_exprs = sizehint!(Vector{Any}(), length(exprs))
-    for expr in exprs
-        append!(mod_exprs, wrap_onednn_api(expr))
+function rewrite!(dag::ExprDAG)
+    for node in get_nodes(dag)
+        new_exprs = []
+        for expr in get_exprs(node)
+            append!(new_exprs, rewrite(expr))
+        end
+        node.exprs .= new_exprs
     end
-    return mod_exprs
 end
 
-@info("Generating .jl wrappers for OneDNN in $outpath...")
-run(context)
-@info("Done generating .jl wrappers for OneDNN in $outpath")
+# HACK WARNING!!
+# For some reason, the topological sorting algorithm in Clang.jl is not catching this Union
+# type ...
+# Manually hoist it's definition to the beginning.
+function replace_JL_Ctag_89!(dag::ExprDAG)
+    nodes = get_nodes(dag)
+    uniondef = nodes[end-1]
+    @assert isa(uniondef, ExprNode{Clang.Generators.UnionAnonymous, Clang.CLUnionDecl})
+    deleteat!(nodes, length(nodes) - 1)
+
+    found = false
+    for (i, node) in enumerate(nodes)
+        for expr in get_exprs(node)
+            if MacroTools.@capture(expr, struct T_ args__ end)
+                if T == :dnnl_memory_desc_t
+                    found = true
+                    break
+                end
+            end
+        end
+        if found
+            insert!(nodes, i - 1, uniondef)
+            break
+        end
+    end
+    @assert found
+end
+
+replace_JL_Ctag_89!(ctx.dag)
+rewrite!(ctx.dag)
+
+# build
+build!(ctx, BUILDSTAGE_PRINTING_ONLY)

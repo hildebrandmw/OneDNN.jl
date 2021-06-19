@@ -209,6 +209,10 @@ logicalsize(x::Memory) = size(x)
 Base.strides(x::Memory{L,T,N}) where {L,T,N} = strides(memorydesc(x), Val(N))
 
 Base.parent(x::Memory) = x.array
+function ChainRulesCore.rrule(::typeof(Base.parent), x::Memory)
+    return parent(x), Δ -> (ChainRulesCore.NoTangent(), Δ)
+end
+
 arraytype(::Memory{L,T,N,A}) where {L,T,N,A} = A
 
 Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x))")
@@ -257,11 +261,13 @@ end
 ancestor(x::Array) = x
 ancestor(x) = ancestor(parent(x))
 
-function typed(M::Memory{Opaque})
-    A = parent(M)
-    desc = memorydesc(M)
-    return Memory{layout(desc)}(A, M.offset, size(M), MemoryPtr(A, desc))
-end
+# TODO: I somehow broke this ...
+# function typed(M::Memory{Opaque})
+#     A = parent(M)
+#     desc = memorydesc(M)
+#     return Memory{layout(desc)}(A, M.offset, size(M), MemoryPtr(A, desc))
+# end
+typed(M::Memory) = materialize(M)
 
 # Convenience method for creating destination memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
@@ -275,7 +281,7 @@ Base.@propagate_inbounds function Base.getindex(
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
     # TODO: this is wrong
-    _strides = ntuple(i -> strides(M)[invperm(striptiles(L...))[i]], Val(N))
+    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
     return getindex(M.array, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides))
 end
 
@@ -287,7 +293,7 @@ Base.@propagate_inbounds function Base.setindex!(
     M::Memory{L,T,N}, v, I::Vararg{Int,N}
 ) where {L,T,N}
     @boundscheck checkbounds(M, I...)
-    _strides = ntuple(i -> strides(M)[invperm(striptiles(L...))[i]], Val(N))
+    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
     return setindex!(
         M.array, v, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides)
     )

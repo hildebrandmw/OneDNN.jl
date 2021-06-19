@@ -82,6 +82,7 @@ Base.lastindex(x::Arguments) = lastindex(x.args)
 abstract type AccessContext end
 struct Reading <: AccessContext end
 struct Writing <: AccessContext end
+struct Unknown <: AccessContext end
 
 function dnnl_arg(x, y, context::AccessContext = Reading())
     return Lib.dnnl_exec_arg_t(x, dnnl_exec_arg(y, context))
@@ -132,6 +133,13 @@ const CONTEXT_MAP = [
 
 macro dnnl_args(syms...)
     exprs = map(syms) do sym
+        # Handle direct interpolation.
+        if isa(sym, Expr) && sym.head == :$
+            newarg = gensym()
+            @assert length(sym.args) == 1
+            return :($(esc(sym.args[1])))
+        end
+
         dnnl_arg_enum = "DNNL_ARG_$(uppercase(getsym(sym)))"
         # Determing the context
         context = nothing

@@ -35,4 +35,4 @@ function _blocking_desc(x::Lib.dnnl_memory_desc_t)
 end
 
 # TODO: Fix this weird "ANONYMOUS1" thing caused by the Union ...
-_blocking_desc(x::Lib.ANONYMOUS1_format_desc) = x.blocking
+_blocking_desc(x::Lib.__JL_Ctag_89) = x.blocking
