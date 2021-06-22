@@ -3,16 +3,9 @@
 # [Lib.]dnnl_f(a,b,c) -> Lib.dnnl_f(dnnl_convert(a), dnnl_convert(b), dnnl_convert(c))
 #
 # Pretty straightforward.
-#
-# If it becomes relevant, I've left code in that will do the transformation
-#
-# [Lib.]f(a,b,c) ->
-#    #genysym1 = dnnl_convert(a)
-#    #genysym2 = dnnl_convert(b)
-#    #genysym2 = dnnl_convert(c)
-#    GC.@preserve #gensym1 #gensym2 @gensym3 begin
-#       Lib.f(#gensym1, #gensym2, @gensym3)
-#    end
+# Note that `dnnl_convert` should return valid GC tracked objects and not raw pointers
+# because the results of `dnnl_convert` are passed through the
+# `Base.cconvert` -> `Base.unsafe_convert` chain.
 macro apicall(expr)
     if expr.head != :call
         error("Only call `@apicall` on function calls")
@@ -58,27 +51,31 @@ end
 # In general, we want there to have a static length.
 # However, for primitives like Concat that may have many args, using a Vector makes more
 # sense.
-struct Arguments{
-    T<:Union{NTuple{<:Any,Lib.dnnl_exec_arg_t},AbstractVector{Lib.dnnl_exec_arg_t}}
-}
+const TupleOrVector{T} = Union{NTuple{N,T},AbstractVector{T}} where {N}
+struct Arguments{T<:TupleOrVector{Lib.dnnl_exec_arg_t}}
     args::T
 end
 Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
 
 Base.length(a::Arguments) = length(a.args)
 
+# Note: `Base.cconvert` should return valid Julia objects and not pointers.
+# We only really use `cconvert` for the `Arguments` based types.
+# Everything else needs to go through `Base.unsafe_convert` for the GC protection.
 function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:NTuple})
-    return Base.cconvert(Ptr{Lib.dnnl_exec_arg_t}, Ref(x.args))
+    return Ref(x.args)
 end
 
 function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:AbstractVector})
-    return Base.cconvert(Ptr{Lib.dnnl_exec_arg_t}, x.args)
+    return x.args
 end
 
 Base.resize!(x::Arguments{<:AbstractVector}, i) = resize!(x.args, i)
 Base.setindex!(x::Arguments{<:AbstractVector}, v, i::Integer) = setindex!(x.args, v, i)
 Base.lastindex(x::Arguments) = lastindex(x.args)
 
+# Note - these definitions aren't strictly necessary, but useful for CachedArrays at
+# the moment so I'm keeping them.
 abstract type AccessContext end
 struct Reading <: AccessContext end
 struct Writing <: AccessContext end
@@ -105,13 +102,18 @@ getsym(x::Expr) = getsym(last(x.args))
 #
 # ```
 # (OneDNN).Arguments(
-#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_SRC, src),
-#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_DST, dst),
+#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_SRC, src, (OneDNN).Reading()),
+#   (OneDNN).dnnl_arg(Lib.DNNL_ARG_DST, dst, (OneDNN).Writing()),
 # )
 # ```
 #
 # The argument symbols, (`src` and `dst` in the above example) get converted to
 # `Lib.DNNL_ARG_SRC` and `Lib.DNNL_ARG_DST` respectively.
+#
+# We also try to automatically determine whether an object is being written or read
+# based on the name of the argument.
+#
+# As far as I can tell, this should be pretty reliable, but we'll see.
 #
 # This requires that functions using this macro follow the same naming conventions as the
 # OneDNN C-API, but that's probably good practiced anyways.
@@ -198,8 +200,8 @@ function attach_finalizer!(engine::Engine)
     end
 end
 
-Base.cconvert(::Type{Lib.dnnl_engine_t}, engine::Engine) = engine.handle
-function Base.cconvert(::Type{Ptr{Lib.dnnl_engine_t}}, engine::Engine)
+Base.unsafe_convert(::Type{Lib.dnnl_engine_t}, engine::Engine) = engine.handle
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_engine_t}}, engine::Engine)
     return Base.unsafe_convert(Ptr{Lib.dnnl_engine_t}, Base.pointer_from_objref(engine))
 end
 
@@ -225,8 +227,8 @@ function attach_finalizer!(stream::Stream)
     end
 end
 
-Base.cconvert(::Type{Lib.dnnl_stream_t}, stream::Stream) = stream.handle
-function Base.cconvert(::Type{Ptr{Lib.dnnl_stream_t}}, stream::Stream)
+Base.unsafe_convert(::Type{Lib.dnnl_stream_t}, stream::Stream) = stream.handle
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_stream_t}}, stream::Stream)
     return Base.unsafe_convert(Ptr{Lib.dnnl_stream_t}, Base.pointer_from_objref(stream))
 end
 
@@ -241,8 +243,8 @@ mutable struct PrimitiveDescriptor
 end
 
 destroy(desc::PrimitiveDescriptor) = @apicall dnnl_primitive_desc_destroy(desc)
-Base.cconvert(::Type{Lib.dnnl_primitive_desc_t}, x::PrimitiveDescriptor) = x.ptr
-function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_desc_t}}, x::PrimitiveDescriptor)
+Base.unsafe_convert(::Type{Lib.dnnl_primitive_desc_t}, x::PrimitiveDescriptor) = x.ptr
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_primitive_desc_t}}, x::PrimitiveDescriptor)
     return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_desc_t}, Base.pointer_from_objref(x))
 end
 
@@ -289,8 +291,8 @@ mutable struct Primitive
 end
 
 destroy(primitive::Primitive) = @apicall dnnl_primitive_destroy(primitive)
-Base.cconvert(::Type{Lib.dnnl_primitive_t}, x::Primitive) = x.ptr
-function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_t}}, x::Primitive)
+Base.unsafe_convert(::Type{Lib.dnnl_primitive_t}, x::Primitive) = x.ptr
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_primitive_t}}, x::Primitive)
     return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_t}, Base.pointer_from_objref(x))
 end
 
@@ -348,8 +350,8 @@ function attach_finalizer!(attributes::Attributes)
     end
 end
 
-Base.cconvert(::Type{Lib.dnnl_primitive_attr_t}, x::Attributes) = x.ptr
-function Base.cconvert(::Type{Ptr{Lib.dnnl_primitive_attr_t}}, x::Attributes)
+Base.unsafe_convert(::Type{Lib.dnnl_primitive_attr_t}, x::Attributes) = x.ptr
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_primitive_attr_t}}, x::Attributes)
     return Base.unsafe_convert(Ptr{Lib.dnnl_primitive_attr_t}, Base.pointer_from_objref(x))
 end
 
@@ -372,8 +374,8 @@ function attach_finalizer!(postops::PostOps)
     end
 end
 
-Base.cconvert(::Type{Lib.dnnl_post_ops_t}, x::PostOps) = x.ptr
-function Base.cconvert(::Type{Ptr{Lib.dnnl_post_ops_t}}, x::PostOps)
+Base.unsafe_convert(::Type{Lib.dnnl_post_ops_t}, x::PostOps) = x.ptr
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_post_ops_t}}, x::PostOps)
     return Base.unsafe_convert(Ptr{Lib.dnnl_post_ops_t}, Base.pointer_from_objref(x))
 end
 
@@ -391,3 +393,41 @@ function Base.append!(a::Attributes, p::PostOps)
 end
 
 appendsum!(p::PostOps, scale = 1) = @apicall dnnl_post_ops_append_sum(p, scale)
+
+#####
+##### Wrapper for `Lib.dnnl_memory_t`
+#####
+
+mutable struct MemoryPtr
+    handle::Lib.dnnl_memory_t
+    MemoryPtr() = new(Lib.dnnl_memory_t())
+end
+
+function MemoryPtr(A::AbstractArray, desc = memorydesc(A))
+    return MemoryPtr(convert(Ptr{Nothing}, pointer(A)), desc)
+end
+
+function MemoryPtr(ptr::Ptr{Nothing}, desc)
+    memory = MemoryPtr()
+    @apicall dnnl_memory_create(memory, desc, global_engine(), ptr)
+    attach_finalizer!(memory)
+    return memory
+end
+
+function attach_finalizer!(memory::MemoryPtr)
+    finalizer(memory) do x
+        @apicall dnnl_memory_destroy(x)
+    end
+end
+
+Base.unsafe_convert(::Type{Lib.dnnl_memory_t}, memory::MemoryPtr) = memory.handle
+function Base.unsafe_convert(::Type{Ptr{Lib.dnnl_memory_t}}, memory::MemoryPtr)
+    return Base.unsafe_convert(Ptr{Lib.dnnl_memory_t}, Base.pointer_from_objref(memory))
+end
+
+@inline function Base.convert(
+    ::Type{T}, memory::MemoryPtr
+) where {T<:Union{Lib.dnnl_memory_t,Ptr{Lib.dnnl_memory_t}}}
+    return Base.unsafe_convert(T, memory)
+end
+

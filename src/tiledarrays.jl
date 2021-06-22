@@ -98,18 +98,14 @@ end
 unchecked_divrem(x::Int, y::Int) = (Base.sdiv_int(x, y), Base.srem_int(x, y))
 
 # Note: not necessarily safe since we are using the unchecked integer division functions.
+# Also, `index` should already be converted from index-1 to index-0.
 function adjust_for_padding(
     size::NTuple{N,Int}, padded_size::NTuple{N,Int}, index::NTuple{N,Int}
 ) where {N}
-    return ntuple(i -> _adjust_for_padding(size[i], padded_size[i], index[i]), Val(N))
+    return ntuple(i -> adjust_for_padding(size[i], padded_size[i], index[i]), Val(N))
 end
 
-# Path where no padding is used.
-function adjust_for_padding(size::NTuple{N,Int}, ::Nothing, index::NTuple{N,Int}) where {N}
-    return index
-end
-
-function _adjust_for_padding(size::Int, padded_size::Int, index::Int)
+function adjust_for_padding(size::Int, padded_size::Int, index::Int)
     size == padded_size && return index
     a, b = unchecked_divrem(index, size)
     return (a * padded_size) + b
@@ -187,14 +183,6 @@ function _strides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     # Drop the last value from `dims`.
     return cumprod((one(Int), head(dims(valT, size)...)...))
 end
-
-# function dimstrides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
-#     return applyperm(_strides(valT, size), T)
-# end
-#
-# @inline function applyperm(size::Tuple{Vararg{Int,N}}, perm::Tuple{Vararg{Int,N}}) where {N}
-#     return ntuple(i -> size[perm[i]], Val(N))
-# end
 
 function fullsize(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     # Constant propagation to the rescue.

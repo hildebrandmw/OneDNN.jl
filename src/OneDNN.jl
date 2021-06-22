@@ -77,7 +77,9 @@ global_stream() = GLOBAL_STREAM[]
 
 # TODO: Turns out that updating is better parallelized across the layer dimension than the
 # within each parameter itself
-function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{T,N}) where {T,N}
+function Flux.Optimise.update!(
+    o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{T,N}
+) where {T,N}
     # Make sure both objects have the same memory layout.
     mx = memorydesc(x)
     mΔ = memorydesc(Δ)
@@ -85,7 +87,9 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Mem
         # Enter the realm of the type unstable!
         sz = logicalsize(mx, Val(N))
         indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
-        indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N)))
+        indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
+            logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
+        )
         update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
         return nothing
     end
@@ -96,7 +100,25 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Mem
     return nothing
 end
 
-function update_typed!(o::Flux.Optimise.Descent, x, indexer_x, y, indexer_y, iter)
+function Flux.Optimise.update!(
+    o::Flux.Optimise.Descent, x::Memory{T,N}, ix, y::Memory{T,N}, iy
+) where {T,N}
+    px = parent(x)
+    py = parent(y)
+    for i in eachindex(ix, iy)
+        px[@inbounds(ix[i])] -= o.eta * py[@inbounds(iy[i])]
+    end
+    return nothing
+end
+
+function update_typed!(
+    o::Flux.Optimise.Descent,
+    x,
+    indexer_x::TiledArrays.TiledIndexer,
+    y,
+    indexer_y::TiledArrays.TiledIndexer,
+    iter,
+)
     for i in iter
         ix = TiledArrays.genindex(indexer_x, Tuple(i))
         iy = TiledArrays.genindex(indexer_y, Tuple(i))
@@ -148,14 +170,7 @@ function setup()
     )
 
     diff_bias = similar(diff_dst, eltype(diff_dst), diff_bias_dims, diff_bias_desc)
-    return (;
-        primitive,
-        primitive_desc,
-        src,
-        diff_bias,
-        diff_weights,
-        diff_dst,
-    )
+    return (; primitive, primitive_desc, src, diff_bias, diff_weights, diff_dst)
 end
 
 end # module

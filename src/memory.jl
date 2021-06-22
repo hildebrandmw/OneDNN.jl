@@ -143,39 +143,6 @@ getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
 # layout(::Array{T,N}) where {T,N} = layout(Val(N))
 # layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 
-mutable struct MemoryPtr
-    handle::Lib.dnnl_memory_t
-    MemoryPtr() = new(Lib.dnnl_memory_t())
-end
-
-function MemoryPtr(A::AbstractArray, desc = memorydesc(A))
-    return MemoryPtr(convert(Ptr{Nothing}, pointer(A)), desc)
-end
-
-function MemoryPtr(ptr::Ptr{Nothing}, desc::MemoryDesc)
-    memory = MemoryPtr()
-    @apicall dnnl_memory_create(memory, desc, global_engine(), ptr)
-    attach_finalizer!(memory)
-    return memory
-end
-
-function attach_finalizer!(memory::MemoryPtr)
-    finalizer(memory) do x
-        @apicall dnnl_memory_destroy(x)
-    end
-end
-
-Base.cconvert(::Type{Lib.dnnl_memory_t}, memory::MemoryPtr) = memory.handle
-function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_t}}, memory::MemoryPtr)
-    return Base.unsafe_convert(Ptr{Lib.dnnl_memory_t}, Base.pointer_from_objref(memory))
-end
-
-@inline function Base.convert(
-    ::Type{T}, memory::MemoryPtr
-) where {T<:Union{Lib.dnnl_memory_t,Ptr{Lib.dnnl_memory_t}}}
-    return Base.cconvert(T, memory)
-end
-
 # Often, we don't want to specialize on the layout of the array, instead allowing oneDNN
 # to work on its own
 struct Memory{T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
