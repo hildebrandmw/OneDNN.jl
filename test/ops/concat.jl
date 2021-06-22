@@ -32,8 +32,8 @@
         grads_expected = back_expected(Δ)
 
         result, back = Zygote._pullback(g, gargs...)
-        @test isa(result, OneDNN.Memory{OneDNN.Opaque})
-        @test OneDNN.typed(result) == expected
+        @test isa(result, OneDNN.Memory)
+        @test OneDNN.materialize(result) == expected
 
         # two flavors, one with a `Memory` passed in, and one with just a normal julia
         # array.

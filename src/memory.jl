@@ -54,7 +54,11 @@ end
 logicalsize(md::MemoryDesc) = reverse(md.dims[1:(md.ndims)])
 logicalsize(md::MemoryDesc, v::Val) = reverse(ntuple(i -> md.dims[i], v))
 function Base.strides(md::MemoryDesc, v::Val)
-    return reverse(ntuple(i -> md.format_desc.blocking.strides[i], v))
+    #return reverse(ntuple(i -> md.format_desc.blocking.strides[i], v))
+    return reverse(ntuple(i -> md.format_desc.strides[i], v))
+end
+function padded_size(md::MemoryDesc, v::Val)
+    return reverse(ntuple(i -> md.padded_dims[i], v))
 end
 Base.ndims(md::MemoryDesc) = md.ndims
 
@@ -64,20 +68,21 @@ function Base.show(io::IO, md::MemoryDesc)
     ndims = md.ndims
     size = logicalsize(md)
     data_type = md.data_type
-    padded_dims = md.padded_dims[1:ndims]
+    padded_dims = reverse(md.padded_dims[1:ndims])
     format_kind = md.format_kind
     padded_offsets = md.padded_offsets[1:ndims]
 
     # Additional information if the format is "blocked"
     extra_format = ""
     if format_kind == Lib.dnnl_blocked
-        blocking_desc = md.format_desc.blocking
+        #blocking_desc = md.format_desc.blocking
+        blocking_desc = md.format_desc
         num_inner_blocks = blocking_desc.inner_nblks
         extra_format = """
                 strides: $(blocking_desc.strides[1:ndims])
                 num inner blocks: $(num_inner_blocks)
-                inner blocks: $(blocking_desc.inner_blks[1:num_inner_blocks])
-                inner indexes: $(blocking_desc.inner_idxs[1:num_inner_blocks])
+                inner blocks: $(reverse(blocking_desc.inner_blks[1:num_inner_blocks]))
+                inner indexes: $(reverse(blocking_desc.inner_idxs[1:num_inner_blocks]))
         """
     end
 
@@ -111,7 +116,9 @@ function memorydesc(
 end
 
 # convenience creation by tag.
-function memorydesc(datatype, dims::NTuple{N,Int}, tag::Lib.dnnl_format_tag_t) where {T,N}
+function memorydesc(
+    datatype, dims::NTuple{N,Int}, tag::Union{Lib.dnnl_format_tag_t,UInt32}
+) where {T,N}
     handle = Ref{MemoryDesc}()
     @apicall dnnl_memory_desc_init_by_tag(handle, N, reverse(dims), datatype, tag)
     return unwrap_ref(handle)
@@ -130,11 +137,11 @@ getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
 ##### Memory
 #####
 
-# Bridge into TiledArrays
-vlayout(x) = Val(layout(x))
-layout(::Val{N}) where {N} = ntuple(identity, Val(N))
-layout(::Array{T,N}) where {T,N} = layout(Val(N))
-layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
+# # Bridge into TiledArrays
+# vlayout(x) = Val(layout(x))
+# layout(::Val{N}) where {N} = ntuple(identity, Val(N))
+# layout(::Array{T,N}) where {T,N} = layout(Val(N))
+# layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
 
 mutable struct MemoryPtr
     handle::Lib.dnnl_memory_t
@@ -171,56 +178,47 @@ end
 
 # Often, we don't want to specialize on the layout of the array, instead allowing oneDNN
 # to work on its own
-struct Opaque end
-struct Memory{L,T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
+struct Memory{T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}
     # The underlying array that is supplying the data.
     array::A
     offset::Int
 
-    # Derived `Memory` objects will have their dimension stripped away since this information
-    # is not maintained in a type stable manner.
-    #
-    # Furthermore, depending on the format, the size of A could actually be bigger than
-    # the product of the logical dimensions.
-    #
-    # Instead, we maintain their logical dims separately.
+    # Keep around some information about size and padding.
     logicalsize::NTuple{N,Int}
 
     # Memory object from DNNL
     memory::MemoryPtr
 end
 
-function Memory{L}(
+function Memory(
     array::A, offset, dims::NTuple{N,Int}, memory::MemoryPtr
-) where {L,T,N,A<:AbstractArray{T}}
-    return Memory{L,T,N,A}(array, convert(Int64, offset), dims, memory)
+) where {T,N,A<:AbstractArray{T}}
+    return Memory{T,N,A}(array, convert(Int64, offset), dims, memory)
 end
 
-layout(::Memory{L}) where {L} = L
-layout(x::Opaque) = x
-
-function Base.convert(::Type{Memory{L,T,N,A}}, x::Memory{L,T,N,B}) where {L,T,N,A,B}
-    return Memory{L}(convert(A, x.array), x.offset, x.logicalsize, x.memory)
+function Base.convert(::Type{Memory{T,N,A}}, x::Memory{T,N,B}) where {T,N,A,B}
+    return Memory(convert(A, x.array), x.offset, x.logicalsize, x.memory)
 end
 
 toany(x::Memory) = toany(memorydesc(x))
 
 logicalsize(x::Memory) = size(x)
-Base.strides(x::Memory{L,T,N}) where {L,T,N} = strides(memorydesc(x), Val(N))
+Base.strides(x::Memory{T,N}) where {T,N} = strides(memorydesc(x), Val(N))
+padded_size(x::Memory{T,N}) where {T,N} = padded_size(memorydesc(x), Val(N))
 
 Base.parent(x::Memory) = x.array
 function ChainRulesCore.rrule(::typeof(Base.parent), x::Memory)
     return parent(x), Δ -> (ChainRulesCore.NoTangent(), Δ)
 end
 
-arraytype(::Memory{L,T,N,A}) where {L,T,N,A} = A
+arraytype(::Memory{T,N,A}) where {T,N,A} = A
 
-Base.show(io::IO, x::Memory{Opaque}) = print(io, "Opaque Memory $(logicalsize(x))")
-Base.show(io::IO, ::MIME"text/plain", x::Memory{Opaque}) = show(io, x)
+Base.show(io::IO, x::Memory) = print(io, "Opaque Memory $(logicalsize(x))")
+Base.show(io::IO, ::MIME"text/plain", x::Memory) = show(io, x)
 
 # for creating OneDNN arguments
 @inline access_pointer(x, offset, context) = pointer(x, offset)
-function setptr!(x::Memory{<:Any,T}, context::AccessContext = Reading()) where {T}
+function setptr!(x::Memory{T}, context::AccessContext = Reading()) where {T}
     ptr = access_pointer(x.array, x.offset, context)
     @apicall dnnl_memory_set_data_handle_v2(x.memory, ptr, global_stream())
 end
@@ -245,7 +243,7 @@ end
 # `memorydesc`, we don't need to hold onto it on the Julia level, which can potentially
 # cause down-stream type instabilities.
 function Memory(A::AbstractArray)
-    return Memory{Opaque}(ancestor(A), _offset(A), size(A), MemoryPtr(A))
+    return Memory(ancestor(A), _offset(A), size(A), MemoryPtr(A))
 end
 
 _offset(::AbstractArray) = one(Int64)
@@ -261,45 +259,15 @@ end
 ancestor(x::Array) = x
 ancestor(x) = ancestor(parent(x))
 
-# TODO: I somehow broke this ...
-# function typed(M::Memory{Opaque})
-#     A = parent(M)
-#     desc = memorydesc(M)
-#     return Memory{layout(desc)}(A, M.offset, size(M), MemoryPtr(A, desc))
-# end
-typed(M::Memory) = materialize(M)
-
 # Convenience method for creating destination memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
-Base.eltype(M::Memory{L,T}) where {L,T} = T
+Base.eltype(M::Memory{T}) where {T} = T
 
-striptiles(_::TiledArrays.Tile, x...) = striptiles(x...)
-striptiles(x::Int, y...) = (x, y...)
-
-Base.@propagate_inbounds function Base.getindex(
-    M::Memory{L,T,N}, I::Vararg{Int,N}
-) where {L,T,N}
-    @boundscheck checkbounds(M, I...)
-    # TODO: this is wrong
-    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
-    return getindex(M.array, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides))
-end
-
-function Base.getindex(::Memory{Opaque}, I::Vararg{Int,N}) where {N}
+function Base.getindex(::Memory, I::Vararg{Int,N}) where {N}
     return error("Cannot index opaque memory formats")
 end
 
-Base.@propagate_inbounds function Base.setindex!(
-    M::Memory{L,T,N}, v, I::Vararg{Int,N}
-) where {L,T,N}
-    @boundscheck checkbounds(M, I...)
-    _strides = ntuple(i -> strides(M)[invperm(L)[i]], Val(N))
-    return setindex!(
-        M.array, v, M.offset + TiledArrays.getoffset(Val(L), size(M), I, _strides)
-    )
-end
-
-function Base.setindex!(::Memory{Opaque}, v, I::Vararg{Int,N}) where {N}
+function Base.setindex!(::Memory, v, I::Vararg{Int,N}) where {N}
     return error("Cannot index opaque memory formats")
 end
 
@@ -316,17 +284,17 @@ end
 
 # General idea: swap the dims and strides.
 # TODO: Need to validate that this is a blocked layout with no tiling ...
-function Base.adjoint(M::Memory{Opaque,T,2}) where {T}
+function Base.adjoint(M::Memory{T,2}) where {T}
     dims = size(M)
     strides = Base.strides(memorydesc(M), Val(2))
 
     reversed_dims = reverse(dims)
     desc = memorydesc(T, reversed_dims, reverse(strides))
     memory = MemoryPtr(parent(M), desc)
-    return Memory{Opaque}(parent(M), M.offset, reversed_dims, memory)
+    return Memory(parent(M), M.offset, reversed_dims, memory)
 end
 
-function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N}
+function Base.permutedims(M::Memory{T,N}, perm::NTuple{N,Int}) where {T,N}
     dims = size(M)
     strides = Base.strides(memorydesc(M), Val(N))
     dims_permuted = unsafe_permute(dims, perm)
@@ -334,7 +302,7 @@ function Base.permutedims(M::Memory{Opaque,T,N}, perm::NTuple{N,Int}) where {T,N
 
     desc = memorydesc(T, dims_permuted, strides_permuted)
     memory = MemoryPtr(parent(M), desc)
-    return Memory{Opaque}(parent(M), M.offset, dims_permuted, memory)
+    return Memory(parent(M), M.offset, dims_permuted, memory)
 end
 
 function unsafe_permute(a::NTuple{N,Int}, b::NTuple{N,Int}) where {N}
@@ -350,40 +318,26 @@ function Base.similar(
     ::Type{T} = eltype(M),
     dims::NTuple{N,Int} = size(M),
     desc::MemoryDesc = memorydesc(M),
-    # Final argument not type stable in the general case since MemoryDesc are opaque.
-    # However, provide this argument so Ops and create type-stable copies.
-    format::Union{Type{Opaque},Val} = layout(M),
 ) where {T,N}
     # Number of bytes to allocate.
-    # For now, we just do this to check that nothing funny is going on.
-    # Otherwise, we will have to get a little creative for the memory formats that require
-    # slightly more than normal storage space.
-    expected = Int(getbytes(desc))
-    if format !== Opaque
-        nelements = TiledArrays.fullsize(format, dims)
-        @assert sizeof(T) * nelements == expected
-    end
+    # Since OneDNN is free to reorder and pad, we need to explicitly ask it.
+    bytes = Int(getbytes(desc))
 
     # Allocate the output array.
     # This will be allocated as just a plain vector with dimensions padded with ones so it
     # has the same dimension as the wrapped "Memory"
-    padded_dims = (div(expected, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
+    padded_dims = (div(bytes, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
     out = similar(M.array, T, padded_dims)
 
     # Since we specifically created this array, the offset will always start atone.
-    return Memory{_rm_val(format)}(out, 1, dims, MemoryPtr(out, desc))
+    return Memory(out, 1, dims, MemoryPtr(out, desc))
 end
 
-_rm_val(x) = x
-_rm_val(::Val{T}) where {T} = T
-
 materialize(x::AbstractArray, args...; kw...) = x
-function materialize(
-    M::Memory{L,T,N}, format::Val = vlayout(Val(N)); allowreorder = true
-) where {L,T,N}
+function materialize(M::Memory{T,N}; allowreorder = true) where {T,N}
     # Check if this memory is already in the requested layout.
     # If so, return the underlying array.
-    desired_strides = TiledArrays.dimstrides(format, logicalsize(M))
+    desired_strides = default_strides(logicalsize(M))
     actual_strides = strides(M)
 
     # In order to return the underlying object, we need to ensure that:
@@ -412,4 +366,16 @@ function ChainRulesCore.rrule(
 ) where {N}
     return materialize(x, args...; kw...),
     Δ -> (ChainRulesCore.NoTangent(), Δ, ntuple(_ -> ChainRulesCore.NoTangent()(), Val(N)))
+end
+
+#####
+##### Bridge to TiledArrays
+#####
+
+function generate_linear_indices(memory::Memory{T,N}) where {T,N}
+    md = OneDNN.memorydesc(memory)
+    _layout = layout(md)
+    _size = logicalsize(md, Val(N))
+    _padded_size = padded_size(md, Val(N))
+    return generate_linear_indices(_layout, _size, _padded_size)
 end

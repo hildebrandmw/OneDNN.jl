@@ -15,7 +15,7 @@
         Y = M(X)
         # Did the automatic weight transformation take place?
         @test M.optimized_weights
-        @test isapprox(y, OneDNN.typed(Y))
+        @test isapprox(y, OneDNN.materialize(Y))
 
         # Ensure inference works correctly
         @inferred M(X)
@@ -23,8 +23,8 @@
         # Now - try backprop
         y, back_jl = Zygote._pullback(m, x)
         Y, back_dnnl = Zygote._pullback(M, X)
-        @test isa(Y, OneDNN.Memory{OneDNN.Opaque})
-        @test isapprox(y, OneDNN.typed(Y))
+        @test isa(Y, OneDNN.Memory)
+        @test isapprox(y, OneDNN.materialize(Y))
         @inferred Zygote._pullback(M, X)
 
         dy = Float32(0.125) * randn(Float32, size(y))
@@ -38,9 +38,9 @@
         # N.B.: Notice the difference in the plurality of the `weights` field ...
         # In the OneDNN code, we try to stay with the plural version since that's what the
         # oneDNN source code generally does.
-        @test isapprox(grads_jl[1].weight, transpose(OneDNN.materialize(OneDNN.typed(grads_dnnl[1].weights))))
-        @test isapprox(grads_jl[1].bias, OneDNN.typed(grads_dnnl[1].bias))
-        @test isapprox(grads_jl[2], OneDNN.typed(grads_dnnl[2]))
+        @test isapprox(grads_jl[1].weight, transpose(OneDNN.materialize(grads_dnnl[1].weights)))
+        @test isapprox(grads_jl[1].bias, OneDNN.materialize(grads_dnnl[1].bias))
+        @test isapprox(grads_jl[2], OneDNN.materialize(grads_dnnl[2]))
         @inferred back_dnnl(DY)
     end
 

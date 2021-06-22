@@ -5,13 +5,12 @@
     A = OneDNN.Memory(a)
     B = OneDNN.Memory(b)
 
-    Z = OneDNN.typed(OneDNN.matmul(A, B))
+    Z = OneDNN.materialize(OneDNN.matmul(A, B))
     z = a * b
-    @test isa(Z, OneDNN.Memory)
     @test size(Z) == (size(a, 1), size(b, 2))
     @test isapprox(Z, z)
 
-    Z = OneDNN.typed(OneDNN.matmul(
+    Z = OneDNN.materialize(OneDNN.matmul(
         OneDNN.Memory(transpose(b)), OneDNN.Memory(transpose(a))
     ))
     @test isapprox(transpose(Z), z)
@@ -25,7 +24,7 @@
 
     Z, back_dnnl = Zygote._pullback(*, X, Y)
     z, back_jl = Zygote._pullback(*, x, y)
-    @test isapprox(OneDNN.typed(Z), z)
+    @test isapprox(OneDNN.materialize(Z), z)
 
     dz = Float32(0.125) * randn(Float32, size(z))
     DZ = OneDNN.Memory(dz)
@@ -35,8 +34,8 @@
 
     @test length(grads_jl) == length(grads_dnnl) == 3
     @test grads_jl[1] === grads_dnnl[1] === nothing
-    @test isapprox(grads_jl[2], OneDNN.typed(grads_dnnl[2]))
-    @test isapprox(grads_jl[3], OneDNN.typed(grads_dnnl[3]))
+    @test isapprox(grads_jl[2], OneDNN.materialize(grads_dnnl[2]))
+    @test isapprox(grads_jl[3], OneDNN.materialize(grads_dnnl[3]))
 end
 
 # # Test applying some post ops

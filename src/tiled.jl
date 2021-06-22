@@ -14,15 +14,17 @@ function layout(memory_desc::Lib.dnnl_memory_desc_t)
 
     # Construct the inner tilings
     tiles = TiledArrays.Tile[]
-    inner_blks = blocking_desc.inner_blks
-    inner_idxs = blocking_desc.inner_idxs
-    for i in 1:(blocking_desc.inner_nblks)
+    inner_num_blocks = blocking_desc.inner_nblks
+    inner_blks = reverse(blocking_desc.inner_blks[1:inner_num_blocks])
+    #inner_idxs = blocking_desc.inner_idxs[1:inner_num_blocks]
+    inner_idxs = ndims .- reverse(blocking_desc.inner_idxs[1:inner_num_blocks])
+    for i in 1:inner_num_blocks
         # Convert from index-0 to index-1.
-        push!(tiles, TiledArrays.Tile(inner_idxs[i] + 1, inner_blks[i]))
+        push!(tiles, TiledArrays.Tile(inner_idxs[i], inner_blks[i]))
     end
     # Order the indices.
-    _strides = collect(blocking_desc.strides[1:ndims])
-    outer = reverse(sortperm(_strides))
+    _strides = collect(reverse(blocking_desc.strides[1:ndims]))
+    outer = sortperm(_strides)
     return (tiles..., outer...)
 end
 
@@ -31,8 +33,14 @@ function _blocking_desc(x::Lib.dnnl_memory_desc_t)
         @show x.format_kind
         error("Wrong Format Kind!")
     end
-    return _blocking_desc(x.format_desc)
+    return x.format_desc
+    #return _blocking_desc(x.format_desc)
 end
 
 # TODO: Fix this weird "ANONYMOUS1" thing caused by the Union ...
-_blocking_desc(x::Lib.__JL_Ctag_89) = x.blocking
+#_blocking_desc(x::Lib.__JL_Ctag_89) = x.blocking
+
+function generate_linear_indices(layout::TiledArrays.MemoryLayout, size, padded_size)
+    indexer = TiledArrays.TiledIndexer{layout}(size, padded_size)
+    return vec([TiledArrays.genindex(indexer, Tuple(I)) for I in CartesianIndices(size)])
+end

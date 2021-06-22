@@ -60,7 +60,9 @@ function innerproduct_backward_data(
         inner_product_desc, noattributes(), global_engine(), noforward()
     ) do primitive, primitive_descriptor
         weights = maybe_reorder(primitive_descriptor, _weights, Lib.dnnl_query_weights_md)
-        diff_dst = maybe_reorder(primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md)
+        diff_dst = maybe_reorder(
+            primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md
+        )
 
         diff_src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_src_md)
         diff_src = similar(diff_dst, eltype(diff_dst), diff_src_dims, diff_src_desc_opt)
@@ -70,7 +72,9 @@ function innerproduct_backward_data(
 end
 
 function innerproduct_backward_weights(
-    diff_weights_dims::NTuple, _src::Memory, _diff_dst::Memory
+    diff_weights_dims::NTuple,
+    _src::Memory,
+    _diff_dst::Memory,
 )
     diff_bias_dims = (diff_weights_dims[2],)
     diff_weights_desc = memorydesc(eltype(_src), diff_weights_dims, dnnl_format_any())
@@ -78,11 +82,9 @@ function innerproduct_backward_weights(
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
 
     @apicall dnnl_inner_product_backward_weights_desc_init(
-        inner_product_desc,
-        toany(_src),
-        diff_weights_desc,
-        diff_bias_desc,
-        toany(_diff_dst),
+        inner_product_desc, toany(_src), diff_weights_desc, diff_bias_desc, toany(
+            _diff_dst
+        )
     )
 
     return temp_primitive(
@@ -112,7 +114,7 @@ end
 ##### Dense Layer
 #####
 
-mutable struct Dense{W<:Memory{Opaque},B<:Memory{Opaque},F}
+mutable struct Dense{W<:Memory,B<:Memory,F}
     weights::W
     bias::B
     activation::F
@@ -184,9 +186,12 @@ function rrule_fused(dense::T, _src, _fuse_activation) where {T}
 
         # Backprop innerproduct kernel
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
-        (
-            diff_weights, diff_bias
-        ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
+        (diff_weights, diff_bias) = innerproduct_backward_weights(
+            size(dense.weights),
+            src,
+            diff_dst_pre,
+        )
+
         return (
             ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
             diff_src,

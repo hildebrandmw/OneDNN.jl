@@ -26,6 +26,17 @@ Base.show(io::IO, tile::Tile) = print(io, "Tile($(tile.dim), $(tile.size))")
 const MemoryLayout{N} = Tuple{Vararg{Union{Int,Tile},N}} where {N}
 const NonBlockedLayout{N} = Tuple{Vararg{Int,N}} where {N}
 
+# Utility function for removing all "Tile"s from the front of an array.
+function strip_leading_tiles(x::Tuple{Vararg{Union{Int,Tile},N}}) where {N}
+    return strip_leading_tiles(x...)
+end
+
+function strip_leading_tiles(x::Tile, y::Vararg{Union{Int,Tile},N}) where {N}
+    return strip_leading_tiles(y...)
+end
+
+strip_leading_tiles(x::Int, y::Vararg{Union{Int,Tile},N}) where {N} = (x, y...)
+
 #####
 ##### Layout Validation
 #####
@@ -81,11 +92,37 @@ function validate(layout::MemoryLayout{N}) where {N}
 end
 
 #####
+##### Adjust indexes for padding.
+#####
+
+unchecked_divrem(x::Int, y::Int) = (Base.sdiv_int(x, y), Base.srem_int(x, y))
+
+# Note: not necessarily safe since we are using the unchecked integer division functions.
+function adjust_for_padding(
+    size::NTuple{N,Int}, padded_size::NTuple{N,Int}, index::NTuple{N,Int}
+) where {N}
+    return ntuple(i -> _adjust_for_padding(size[i], padded_size[i], index[i]), Val(N))
+end
+
+# Path where no padding is used.
+function adjust_for_padding(size::NTuple{N,Int}, ::Nothing, index::NTuple{N,Int}) where {N}
+    return index
+end
+
+function _adjust_for_padding(size::Int, padded_size::Int, index::Int)
+    size == padded_size && return index
+    a, b = unchecked_divrem(index, size)
+    return (a * padded_size) + b
+end
+
+#####
 ##### Index Conversion Logic
 #####
 
+# Expand the index according to the given layout.
+# NOTE: `I` should be post padding adjusting if necessary.
 function splitindex(::Val{T}, I::Tuple{Vararg{Int,N}}) where {T,N}
-    return _splitindex(T, I .- one(Int))
+    return _splitindex(T, I)
 end
 
 # Work from the first index to the last.
@@ -114,7 +151,7 @@ end
 
 @inline process(x::Int, I::Tuple{Vararg{Int,N}}) where {N} = (I[x], I)
 @inline function process(x::Tile, I::Tuple{Vararg{Int,N}}) where {N}
-    outer, inner = divrem(I[x.dim], x.size)
+    outer, inner = unchecked_divrem(I[x.dim], x.size)
     return (inner, ntuple(i -> i == x.dim ? outer : I[i], Val(N)))
 end
 
@@ -151,13 +188,13 @@ function _strides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     return cumprod((one(Int), head(dims(valT, size)...)...))
 end
 
-function dimstrides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
-    return applyperm(_strides(valT, size), T)
-end
-
-@inline function applyperm(size::Tuple{Vararg{Int,N}}, perm::Tuple{Vararg{Int,N}}) where {N}
-    return ntuple(i -> size[perm[i]], Val(N))
-end
+# function dimstrides(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
+#     return applyperm(_strides(valT, size), T)
+# end
+#
+# @inline function applyperm(size::Tuple{Vararg{Int,N}}, perm::Tuple{Vararg{Int,N}}) where {N}
+#     return ntuple(i -> size[perm[i]], Val(N))
+# end
 
 function fullsize(valT::Val{T}, size::Tuple{Vararg{Int,N}}) where {T,N}
     # Constant propagation to the rescue.
@@ -177,19 +214,12 @@ end
 #####
 
 function getoffset(
-    valT::Val{T}, size::Tuple{Vararg{Int,N}}, I::Tuple{Vararg{Int,N}}, strides::Nothing
-) where {T,N}
-    Base.@_inline_meta
-    return getoffset(valT, size, I, _strides(valT, size))
-end
-
-function getoffset(
     valT::Val{T},
-    size::Tuple{Vararg{Int,N}},
-    I::Tuple{Vararg{Int,N}},
-    strides::Tuple{Vararg{Int,N}},
+    size::Tuple{Vararg{Int,N}},     # Padded Size
+    I::Tuple{Vararg{Int,N}},        # Post-padded index
 ) where {T,N}
     Base.@_inline_meta
+    strides = _strides(valT, size)
     index = splitindex(valT, I)
     offset = zero(Int)
     for i in eachindex(strides)
@@ -198,43 +228,65 @@ function getoffset(
     return offset
 end
 
-#####
-##### Tiled Array
-#####
-
-struct TiledArray{T,L,N} <: AbstractArray{T,N}
-    parent::Vector{T}
+# Generates indices into a tiled array.
+# Parameters:
+#
+# `L`: Layout type parameter.
+# `N`: Number of Dims.
+struct TiledIndexer{L,N}
     size::NTuple{N,Int}
-end
-Base.parent(A::TiledArray) = A.parent
-
-function TiledArray{T,L}(::UndefInitializer, size::Tuple{Vararg{Int,N}}) where {T,L,N}
-    # Allocate enough room for the whole layout.
-    parent = Vector{T}(undef, fullsize(Val(L), size))
-    return TiledArray{T,L,N}(parent, size)
+    padded_size::NTuple{N,Int}
 end
 
-layout(::Type{<:TiledArray{<:Any,L}}) where {L} = L
-layout(x::T) where {T<:TiledArray} = layout(T)
-vlayout(x) = Val(layout(x))
-
-# Array interface
-@inline Base.size(x::TiledArray) = x.size
-Base.IndexStyle(::Type{<:TiledArray}) = Base.IndexCartesian()
-Base.@propagate_inbounds function Base.getindex(
-    A::TiledArray{T,L,N}, I::Vararg{Int,N}; strides = nothing
-) where {T,L,N}
-    @boundscheck checkbounds(A, I...)
-    offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
-    return @inbounds(getindex(parent(A), offset))
+function TiledIndexer{L}(size::NTuple{N,Int}, padded_size::NTuple{N,Int}) where {L,N}
+    return TiledIndexer{L,N}(size, padded_size)
 end
 
-Base.@propagate_inbounds function Base.setindex!(
-    A::TiledArray{T,L,N}, v, I::Vararg{Int,N}; strides = nothing
-) where {T,L,N}
-    @boundscheck checkbounds(A, I...)
-    offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
-    return @inbounds setindex!(parent(A), v, offset)
+function genindex(x::TiledIndexer{L,N}, I::NTuple{N,Int}) where {L,N}
+    return 1 + getoffset(Val(L), x.padded_size, adjust_for_padding(x.size, x.padded_size, I .- 1))
 end
+
+# function genindex(x::TiledIndexer{L,N,Nothing}, I::NTuple{N,Int}) where {L,N}
+#     return getoffset(Val(N), x.size, I)
+# end
+
+# #####
+# ##### Tiled Array
+# #####
+#
+# struct TiledArray{T,L,N} <: AbstractArray{T,N}
+#     parent::Vector{T}
+#     size::NTuple{N,Int}
+# end
+# Base.parent(A::TiledArray) = A.parent
+#
+# function TiledArray{T,L}(::UndefInitializer, size::Tuple{Vararg{Int,N}}) where {T,L,N}
+#     # Allocate enough room for the whole layout.
+#     parent = Vector{T}(undef, fullsize(Val(L), size))
+#     return TiledArray{T,L,N}(parent, size)
+# end
+#
+# layout(::Type{<:TiledArray{<:Any,L}}) where {L} = L
+# layout(x::T) where {T<:TiledArray} = layout(T)
+# vlayout(x) = Val(layout(x))
+#
+# # Array interface
+# @inline Base.size(x::TiledArray) = x.size
+# Base.IndexStyle(::Type{<:TiledArray}) = Base.IndexCartesian()
+# Base.@propagate_inbounds function Base.getindex(
+#     A::TiledArray{T,L,N}, I::Vararg{Int,N}; strides = nothing
+# ) where {T,L,N}
+#     @boundscheck checkbounds(A, I...)
+#     offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
+#     return @inbounds(getindex(parent(A), offset))
+# end
+#
+# Base.@propagate_inbounds function Base.setindex!(
+#     A::TiledArray{T,L,N}, v, I::Vararg{Int,N}; strides = nothing
+# ) where {T,L,N}
+#     @boundscheck checkbounds(A, I...)
+#     offset = getoffset(vlayout(A), size(A), I, strides) + one(Int)
+#     return @inbounds setindex!(parent(A), v, offset)
+# end
 
 end # module

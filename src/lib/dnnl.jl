@@ -1039,7 +1039,8 @@ struct dnnl_memory_desc_t
     padded_offsets::dnnl_dims_t
     offset0::dnnl_dim_t
     format_kind::dnnl_format_kind_t
-    format_desc::__JL_Ctag_89
+    #format_desc::__JL_Ctag_89
+    format_desc::dnnl_blocking_desc_t
     extra::dnnl_memory_extra_desc_t
 end
 

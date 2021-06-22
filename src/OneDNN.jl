@@ -77,11 +77,16 @@ global_stream() = GLOBAL_STREAM[]
 
 # TODO: Turns out that updating is better parallelized across the layer dimension than the
 # within each parameter itself
-function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{T,N}) where {T,N}
     # Make sure both objects have the same memory layout.
     mx = memorydesc(x)
-    if mx != memorydesc(Δ)
-        update_typed!(o, typed(x), typed(Δ))
+    mΔ = memorydesc(Δ)
+    if mx != mΔ
+        # Enter the realm of the type unstable!
+        sz = logicalsize(mx, Val(N))
+        indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
+        indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N)))
+        update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
         return nothing
     end
 
@@ -91,9 +96,18 @@ function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
     return nothing
 end
 
-function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-    return x .= x .- (o.eta .* Δ)
+function update_typed!(o::Flux.Optimise.Descent, x, indexer_x, y, indexer_y, iter)
+    for i in iter
+        ix = TiledArrays.genindex(indexer_x, Tuple(i))
+        iy = TiledArrays.genindex(indexer_y, Tuple(i))
+        x[ix] -= o.eta * y[iy]
+    end
+    return nothing
 end
+
+# function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
+#     return x .= x .- (o.eta .* Δ)
+# end
 
 # # # Apply the negative here so we can just add together in `update!`.
 # # # This is because it appears that OneDNN is lacking a binary `-`

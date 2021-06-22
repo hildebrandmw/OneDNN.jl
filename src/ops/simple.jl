@@ -2,8 +2,8 @@
 ##### Reorder
 #####
 
-function reorder(memorydesc::MemoryDesc, from::Memory, format = Opaque)
-    to = similar(from, eltype(from), size(from), memorydesc, format)
+function reorder(memorydesc::MemoryDesc, from::Memory)
+    to = similar(from, eltype(from), size(from), memorydesc)
     reorder!(to, from)
     return kernel_exit_hook(to)
 end

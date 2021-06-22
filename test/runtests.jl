@@ -6,7 +6,9 @@ using Random
 
 # for testing equivalence
 # using Flux, Zygote
+import CEnum
 using Flux: Flux
+import ProgressMeter
 using Zygote
 
 include("tiled.jl")

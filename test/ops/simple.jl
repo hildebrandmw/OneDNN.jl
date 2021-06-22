@@ -8,14 +8,13 @@
     X = OneDNN.Memory(x)
     linear = OneDNN.Linear(1, 2)
     Y = OneDNN.eltwise(linear, X)
-    Z = OneDNN.typed(Y)
-    @test isa(Z, OneDNN.Memory)
+    Z = OneDNN.materialize(Y)
     @test isapprox(Z, f(x, 1, 2))
 
     # Try mutating version
     Z .= zero(eltype(Z))
     @test all(iszero, Z)
-    OneDNN.eltwise!(Z, X, OneDNN.forward_expand(linear)...)
+    OneDNN.eltwise!(OneDNN.Memory(Z), X, OneDNN.forward_expand(linear)...)
     @test isapprox(Z, f(x, 1, 2))
 
     # Backprop
@@ -26,7 +25,7 @@
     result = OneDNN.eltwise_backward(OneDNN.Linear(0.5, 2), Z, X)
 
     expected = back(z)[2]
-    @test isapprox(OneDNN.typed(result), expected)
+    @test isapprox(OneDNN.materialize(result), expected)
 
     #####
     ##### Aliased Functions
@@ -41,7 +40,7 @@
         y, back_expected = Zygote._pullback(F, x)
         Y, back_result = Zygote._pullback(OneDNN.eltwise, f, X)
 
-        @test isapprox(OneDNN.typed(Y), y)
+        @test isapprox(OneDNN.materialize(Y), y)
         @inferred Zygote._pullback(OneDNN.eltwise, f, X)
 
         dy = rand(Float32, size(y))
@@ -49,14 +48,14 @@
 
         dX = back_result(dY)[3]
         dx = back_expected(dy)[2]
-        @test isapprox(dx, OneDNN.typed(dX))
+        @test isapprox(dx, OneDNN.materialize(dX))
         @inferred back_result(dY)
 
         # Make sure the alias rules work as well.
         YY, back_result_2 = Zygote._pullback(f, X)
-        @test isapprox(OneDNN.typed(YY), y)
+        @test isapprox(OneDNN.materialize(YY), y)
         dXX = back_result_2(dY)[3]
-        @test isapprox(dx, OneDNN.typed(dXX))
+        @test isapprox(dx, OneDNN.materialize(dXX))
         @inferred back_result_2(dY)
     end
 end
@@ -73,8 +72,8 @@ end
         @show f
         z = f.(x, y)
         Z = f.(X, Y)
-        @test isa(Z, OneDNN.Memory{OneDNN.Opaque})
-        @test isapprox(z, OneDNN.typed(Z))
+        @test isa(Z, OneDNN.Memory)
+        @test isapprox(z, OneDNN.materialize(Z))
     end
 end
 end

@@ -33,27 +33,22 @@ end
 
     vx = view(x, 1, :)
     VX = OneDNN.Memory(vx)
-    @test OneDNN.typed(VX) == vx
     @test OneDNN.materialize(VX) == vx
 
     vy = view(x, :, 1)
     VY = OneDNN.Memory(vy)
-    @test OneDNN.typed(VY) == vy
     @test OneDNN.materialize(VY) == vy
 
     Z = VX + VY
-    @test OneDNN.typed(Z) == vx .+ vy
     @test OneDNN.materialize(Z) == vx .+ vy
 
     # 2D views
     vx = view(x, 1:5, 2:11)
     VX = OneDNN.Memory(vx)
-    @test OneDNN.typed(VX) == vx
     @test OneDNN.materialize(VX) == vx
 
     vy = view(y, 20:30, :)
     VY = OneDNN.Memory(vy)
-    @test OneDNN.typed(VY) == vy
     @test OneDNN.materialize(VY) == vy
 end
 
