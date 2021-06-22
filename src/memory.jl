@@ -365,7 +365,7 @@ function ChainRulesCore.rrule(
     ::typeof(materialize), x, args::Vararg{Any,N}; kw...
 ) where {N}
     return materialize(x, args...; kw...),
-    Δ -> (ChainRulesCore.NoTangent(), Δ, ntuple(_ -> ChainRulesCore.NoTangent()(), Val(N)))
+    Δ -> (ChainRulesCore.NoTangent(), Δ, ntuple(_ -> ChainRulesCore.NoTangent(), Val(N)))
 end
 
 #####
