@@ -65,4 +65,16 @@ wascalled(x::CalledConvert) = x.called
         @test ref_equal(OneDNN.wrap_ref(x), Ref(10))
         @test ref_equal(OneDNN.wrap_ref(y), Ref(10))
     end
+
+    @testset "Testing Ancestor" begin
+        w = collect(1:10)
+        x = view(w, 1:4)
+        y = reshape(x, 2, 2)
+        z = view(y, :, 1)
+
+        @test OneDNN.ancestor(w) === w
+        @test OneDNN.ancestor(x) === w
+        @test OneDNN.ancestor(y) === w
+        @test OneDNN.ancestor(z) === w
+    end
 end # @testset

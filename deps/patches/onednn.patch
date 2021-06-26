@@ -1,0 +1,13 @@
+diff --git a/src/cpu/cpu_inner_product_list.cpp b/src/cpu/cpu_inner_product_list.cpp
+index 755c74550..bc23f9a17 100644
+--- a/src/cpu/cpu_inner_product_list.cpp
++++ b/src/cpu/cpu_inner_product_list.cpp
+@@ -38,7 +38,7 @@ const impl_list_item_t impl_list[] = {
+         /* f32 */
+         CPU_INSTANCE_X64(brgemm_inner_product_fwd_t<avx512_core>)
+         CPU_INSTANCE_X64(brgemm_inner_product_bwd_data_t<avx512_core>)
+-        CPU_INSTANCE_X64(brgemm_inner_product_bwd_weights_t<avx512_core>)
++        //CPU_INSTANCE_X64(brgemm_inner_product_bwd_weights_t<avx512_core>)
+         CPU_INSTANCE(gemm_inner_product_fwd_t<f32>)
+         CPU_INSTANCE(gemm_inner_product_bwd_data_t<f32>)
+         CPU_INSTANCE(gemm_inner_product_bwd_weights_t<f32>)

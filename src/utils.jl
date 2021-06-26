@@ -44,6 +44,11 @@ macro apicall(expr)
     end
 end
 
+# Get to the ultimate parent.
+ancestor(x::AbstractArray) = ancestor(x, parent(x))
+ancestor(x::AbstractArray, y::AbstractArray) = ancestor(y, parent(y))
+ancestor(x::T, ::T) where {T<:AbstractArray} = x
+
 #####
 ##### Runtime Arguments
 #####

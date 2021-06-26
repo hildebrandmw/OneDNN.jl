@@ -222,10 +222,6 @@ function ChainRulesCore.rrule(::Type{<:Memory}, x)
     return (Memory(x), Δ -> (ChainRulesCore.NoTangent(), Δ))
 end
 
-# Get to the ultimate parent.
-ancestor(x::Array) = x
-ancestor(x) = ancestor(parent(x))
-
 # Convenience method for creating destination memories from a source memory.
 Base.size(M::Memory) = M.logicalsize
 Base.eltype(M::Memory{T}) where {T} = T
