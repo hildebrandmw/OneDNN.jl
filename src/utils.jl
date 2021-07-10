@@ -45,6 +45,7 @@ macro apicall(expr)
 end
 
 # Get to the ultimate parent.
+# Strategy: keep calling `parent` until `typeof(parent(x)) == typeof(x)`.
 ancestor(x::AbstractArray) = ancestor(x, parent(x))
 ancestor(x::AbstractArray, y::AbstractArray) = ancestor(y, parent(y))
 ancestor(x::T, ::T) where {T<:AbstractArray} = x

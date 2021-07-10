@@ -10,10 +10,6 @@ using MacroTools: MacroTools
 using Polyester: Polyester
 using Zygote: Zygote
 
-# # time how long some operations take
-# using TimerOutputs: TimerOutputs
-# const to = TimerOutputs.TimerOutput()
-
 #####
 ##### deps
 #####
@@ -75,8 +71,8 @@ global_stream() = GLOBAL_STREAM[]
 ##### Flux compat
 #####
 
-# TODO: Turns out that updating is better parallelized across the layer dimension than the
-# within each parameter itself
+# # TODO: Turns out that updating is better parallelized across the layer dimension than the
+# # within each parameter itself
 function Flux.Optimise.update!(
     o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{T,N}
 ) where {T,N}
@@ -84,14 +80,15 @@ function Flux.Optimise.update!(
     mx = memorydesc(x)
     mΔ = memorydesc(Δ)
     if mx != mΔ
-        # Enter the realm of the type unstable!
-        sz = logicalsize(mx, Val(N))
-        indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
-        indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
-            logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
-        )
-        update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
-        return nothing
+        error("Incompatible memory formats!")
+        # # Enter the realm of the type unstable!
+        # sz = logicalsize(mx, Val(N))
+        # indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
+        # indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
+        #     logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
+        # )
+        # update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
+        # return nothing
     end
 
     xa = vec(parent(x))
@@ -105,27 +102,28 @@ function Flux.Optimise.update!(
 ) where {T,N}
     px = parent(x)
     py = parent(y)
+    eta = convert(T, o.eta)
     for i in eachindex(ix, iy)
-        px[@inbounds(ix[i])] -= o.eta * py[@inbounds(iy[i])]
+        @inbounds(px[ix[i]] -= eta * py[iy[i]])
     end
     return nothing
 end
 
-function update_typed!(
-    o::Flux.Optimise.Descent,
-    x,
-    indexer_x::TiledArrays.TiledIndexer,
-    y,
-    indexer_y::TiledArrays.TiledIndexer,
-    iter,
-)
-    for i in iter
-        ix = TiledArrays.genindex(indexer_x, Tuple(i))
-        iy = TiledArrays.genindex(indexer_y, Tuple(i))
-        x[ix] -= o.eta * y[iy]
-    end
-    return nothing
-end
+# function update_typed!(
+#     o::Flux.Optimise.Descent,
+#     x,
+#     indexer_x::TiledArrays.TiledIndexer,
+#     y,
+#     indexer_y::TiledArrays.TiledIndexer,
+#     iter,
+# )
+#     for i in iter
+#         ix = TiledArrays.genindex(indexer_x, Tuple(i))
+#         iy = TiledArrays.genindex(indexer_y, Tuple(i))
+#         x[ix] -= o.eta * y[iy]
+#     end
+#     return nothing
+# end
 
 # function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
 #     return x .= x .- (o.eta .* Δ)

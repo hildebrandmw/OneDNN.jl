@@ -1,6 +1,5 @@
 function concat(A::Vector{T}, dim::Integer) where {T<:Memory}
     nargs = length(A)
-
     front = first(A)
     dims = size(front)
     vndims = Val(ndims(front))

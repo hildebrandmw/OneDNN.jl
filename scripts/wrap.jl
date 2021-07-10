@@ -81,26 +81,6 @@ function rewrite(expr::Expr)
 
     # Check if this is a ccall
     elseif expr.head == :function
-        # # Handle special cases.
-        # #
-        # # For some reason, the argument to this method is not captured.
-        # # I have no idea why ...
-        # if expr.args[1].args[1] == :dnnl_memory_desc_get_size
-        #     expr = :(
-        #         function dnnl_memory_desc_get_size(memory_desc)
-        #             return ccall(
-        #                 (:dnnl_memory_desc_get_size, dnnl),
-        #                 Csize_t,
-        #                 (Ptr{dnnl_memory_desc_t},),
-        #                 memory_desc,
-        #             )
-        #         end
-        #     )
-        #     # Remove line number nodes
-        #     expr = MacroTools.prewalk(MacroTools.rmlines, expr)
-        #     return [expr]
-        # end
-
         # use the powerful macrotools to transform `dnnl_dims_t` to `ptr{dnnl_dim_t}`.
         function_body = expr.args[2]
         expr.args[2] = MacroTools.postwalk(function_body) do x
