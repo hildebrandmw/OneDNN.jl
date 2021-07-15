@@ -20,6 +20,7 @@ include("wrap.jl")
 include("tiledarrays.jl")
 using .TiledArrays: TiledArrays
 include("utils.jl")
+include("types.jl")
 include("tiled.jl")
 include("memory.jl")
 
@@ -46,7 +47,8 @@ end
 
 # Initialize the default Engine and Stream.
 function __init__()
-    GLOBAL_ENGINE[] = Engine(Lib.dnnl_cpu)
+    engine = Engine(Lib.dnnl_cpu)
+    GLOBAL_ENGINE[] = engine
 
     # Create a thread pool.
     threadpool = Wrap.construct_threadpool(
@@ -56,9 +58,9 @@ function __init__()
     )
     GLOBAL_THREADPOOL[] = threadpool
 
-    stream = Stream()
+    stream = Stream(engine)
     @apicall dnnl_threadpool_interop_stream_create(
-        stream, GLOBAL_ENGINE[], threadpool.cpp_object
+        stream, engine, threadpool.cpp_object
     )
     GLOBAL_STREAM[] = stream
     return nothing

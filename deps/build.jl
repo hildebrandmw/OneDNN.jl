@@ -16,7 +16,11 @@ end
 patchdir = joinpath(@__DIR__, "patches")
 patchfile = joinpath(patchdir, "onednn.patch")
 cd(onednn_src)
-run(`git apply $patchfile`)
+try
+    run(`git apply $patchfile`)
+catch e
+    isa(e, ProcessFailedException) || rethrow(e)
+end
 
 # Run cmake
 cmake_args = [
@@ -30,10 +34,11 @@ cmake_args = [
     "-DDNNL_CPU_RUNTIME=THREADPOOL",
 ]
 
-mkdir(onednn_build)
+isdir(onednn_build) || mkdir(onednn_build)
 cd(onednn_build)
 run(`cmake .. $cmake_args`)
-run(`make -j`)
+nproc = parse(Int, read(`nproc`, String))
+run(`make -j$nproc`)
 run(`make install`)
 
 # Cleanup
