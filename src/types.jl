@@ -1,5 +1,5 @@
 struct InnerConstructor end
-macro wrap_type(julia_name, c_name, destructor, lower_constructor)
+macro wrap_type(julia_name, c_name, destructor)
     lower_constructor_name = Symbol("_$julia_name")
 
     # Automatically add the "Lib" prefix if required.
@@ -21,7 +21,6 @@ macro wrap_type(julia_name, c_name, destructor, lower_constructor)
             #
             # The higher constructor will simply forward to the lower constructor but
             # attach a finalizer before returning.
-            $lower_constructor
             function $julia_name(args...)
                 x = $lower_constructor_name(args...)
                 attach_finalizer!(x)
@@ -48,94 +47,85 @@ destroy(x) = error("Define `destroy` for type $(typeof(x))")
 ##### Engine
 #####
 
-@wrap_type Engine dnnl_engine_t dnnl_engine_destroy begin
-    # Lower Constructor
-    function _Engine(kind::Lib.dnnl_engine_kind_t, index = 0)
-        engine = Engine(InnerConstructor())
-        @apicall dnnl_engine_create(engine, kind, index)
-        return engine
-    end
+@wrap_type Engine dnnl_engine_t dnnl_engine_destroy
+# Lower Constructor
+function _Engine(kind::Lib.dnnl_engine_kind_t, index = 0)
+    engine = Engine(InnerConstructor())
+    @apicall dnnl_engine_create(engine, kind, index)
+    return engine
 end
 
-@wrap_type Stream dnnl_stream_t dnnl_stream_destroy begin
-    # Lower Constructor
-    function _Stream(engine::Engine)
-        stream = Stream(InnerConstructor())
-        @apicall dnnl_stream_create(stream, engine, Lib.dnnl_stream_default_flags)
-        return stream
-    end
+@wrap_type Stream dnnl_stream_t dnnl_stream_destroy
+# Lower Constructor
+function _Stream(engine::Engine)
+    stream = Stream(InnerConstructor())
+    @apicall dnnl_stream_create(stream, engine, Lib.dnnl_stream_default_flags)
+    return stream
 end
 
-@wrap_type Attributes dnnl_primitive_attr_t dnnl_primitive_attr_destroy begin
-    # Lower Constructor
-    function _Attributes()
-        attributes = Attributes(InnerConstructor())
-        @apicall dnnl_primitive_attr_create(attributes)
-        return attributes
-    end
-
-    noattributes() = Attributes()
+@wrap_type Attributes dnnl_primitive_attr_t dnnl_primitive_attr_destroy
+# Lower Constructor
+function _Attributes()
+    attributes = Attributes(InnerConstructor())
+    @apicall dnnl_primitive_attr_create(attributes)
+    return attributes
 end
 
+noattributes() = Attributes()
 
-@wrap_type PostOps dnnl_post_ops_t dnnl_post_ops_destroy begin
-    function _PostOps()
-        postops = PostOps(InnerConstructor())
-        @apicall dnnl_post_ops_create(postops)
-        return postops
-    end
+@wrap_type PostOps dnnl_post_ops_t dnnl_post_ops_destroy
+function _PostOps()
+    postops = PostOps(InnerConstructor())
+    @apicall dnnl_post_ops_create(postops)
+    return postops
 end
 
-@wrap_type PrimitiveDescriptor dnnl_primitive_desc_t dnnl_primitive_desc_destroy begin
-    # Lower Constructor
-    # Automatically apply "Lib.dnnl_primitive_desc_create" if the first argument is
-    # not already a function.
-    function _PrimitiveDescriptor(args::Vararg{Any,N}) where {N}
-        return _PrimitiveDescriptor(Lib.dnnl_primitive_desc_create, args...)
-    end
-
-    function _PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
-        descriptor = PrimitiveDescriptor(InnerConstructor())
-        # Configure scratchpad mode to be "user" so we can apply our own scratchpads.
-        attributes = _get_attributes(args...)
-        @apicall dnnl_primitive_attr_set_scratchpad_mode(
-            attributes, Lib.dnnl_scratchpad_mode_user
-        )
-        @apicall f(descriptor, args...)
-        return descriptor
-    end
-
-    noforward() = Ptr{Lib.dnnl_primitive_desc}()
+@wrap_type PrimitiveDescriptor dnnl_primitive_desc_t dnnl_primitive_desc_destroy
+# Lower Constructor
+# Automatically apply "Lib.dnnl_primitive_desc_create" if the first argument is
+# not already a function.
+function _PrimitiveDescriptor(args::Vararg{Any,N}) where {N}
+    return _PrimitiveDescriptor(Lib.dnnl_primitive_desc_create, args...)
 end
 
-
-@wrap_type Primitive dnnl_primitive_t dnnl_primitive_destroy begin
-    # Lower Constructor
-    function _Primitive(descriptor::PrimitiveDescriptor)
-        primitive = Primitive(InnerConstructor())
-        @apicall dnnl_primitive_create(primitive, descriptor)
-        return primitive
-    end
+function _PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
+    descriptor = PrimitiveDescriptor(InnerConstructor())
+    # Configure scratchpad mode to be "user" so we can apply our own scratchpads.
+    attributes = _get_attributes(args...)
+    @apicall dnnl_primitive_attr_set_scratchpad_mode(
+        attributes, Lib.dnnl_scratchpad_mode_user
+    )
+    @apicall f(descriptor, args...)
+    return descriptor
 end
 
-@wrap_type MemoryPtr dnnl_memory_t dnnl_memory_destroy begin
-    # Lower Constructor
-    function _MemoryPtr(A::AbstractArray, desc = memorydesc(A))
-        return _MemoryPtr(convert(Ptr{Nothing}, pointer(A)), desc)
-    end
+noforward() = Ptr{Lib.dnnl_primitive_desc}()
 
-    function _MemoryPtr(ptr::Ptr{Nothing}, desc)
-        memory = MemoryPtr(InnerConstructor())
-        @apicall dnnl_memory_create(memory, desc, global_engine(), ptr)
-        return memory
-    end
+@wrap_type Primitive dnnl_primitive_t dnnl_primitive_destroy
+# Lower Constructor
+function _Primitive(descriptor::PrimitiveDescriptor)
+    primitive = Primitive(InnerConstructor())
+    @apicall dnnl_primitive_create(primitive, descriptor)
+    return primitive
+end
 
-    # Define an extra conversion function.
-    @inline function Base.convert(
-        ::Type{T}, memory::MemoryPtr
-    ) where {T<:MaybePtr{Lib.dnnl_memory_t}}
-        return Base.unsafe_convert(T, memory)
-    end
+@wrap_type MemoryPtr dnnl_memory_t dnnl_memory_destroy
+# Lower Constructor
+function _MemoryPtr(A::AbstractArray, desc = memorydesc(A))
+    return _MemoryPtr(convert(Ptr{Nothing}, pointer(A)), desc)
+end
+
+function _MemoryPtr(ptr::Ptr{Nothing}, desc)
+    memory = MemoryPtr(InnerConstructor())
+    @apicall dnnl_memory_create(memory, desc, global_engine(), ptr)
+    return memory
+end
+
+# Define an extra conversion function.
+@inline function Base.convert(
+    ::Type{T}, memory::MemoryPtr
+) where {T<:MaybePtr{Lib.dnnl_memory_t}}
+    return Base.unsafe_convert(T, memory)
 end
 
 #####
@@ -202,10 +192,8 @@ kernel_exit_hook(x::Tuple) = map(kernel_exit_hook, x)
 function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
     desc = _PrimitiveDescriptor(args...)
     primitive = _Primitive(desc)
-    GC.@preserve primitive desc begin
-        ret = f(primitive, desc)
-        destroy(primitive, desc)
-    end
+    ret = f(primitive, desc)
+    destroy(primitive, desc)
     return kernel_exit_hook(ret)
 end
 

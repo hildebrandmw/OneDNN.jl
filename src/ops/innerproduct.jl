@@ -42,6 +42,7 @@ function innerproduct(
             dst_dims,
             query_md(primitive_descriptor, Lib.dnnl_query_dst_md),
         )
+
         execute!(primitive, @dnnl_args src weights bias dst)
         return dst
     end
