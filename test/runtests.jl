@@ -19,6 +19,7 @@ include("ops/simple.jl")
 include("ops/batchnorm.jl")
 include("ops/matmul.jl")
 include("ops/innerproduct.jl")
+include("op/convolution.jl")
 include("ops/pool.jl")
 include("ops/concat.jl")
 

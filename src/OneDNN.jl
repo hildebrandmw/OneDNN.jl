@@ -35,6 +35,7 @@ include("ops/batchnorm.jl")
 include("ops/concat.jl")
 include("ops/pool.jl")
 include("ops/innerproduct.jl")
+include("ops/convolution.jl")
 
 # include("placeholder.jl")
 
