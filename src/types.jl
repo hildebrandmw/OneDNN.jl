@@ -68,10 +68,11 @@ end
 function _Attributes()
     attributes = Attributes(InnerConstructor())
     @apicall dnnl_primitive_attr_create(attributes)
+    @apicall dnnl_primitive_attr_set_scratchpad_mode(
+        attributes, Lib.dnnl_scratchpad_mode_user
+    )
     return attributes
 end
-
-noattributes() = Attributes()
 
 @wrap_type PostOps dnnl_post_ops_t dnnl_post_ops_destroy
 function _PostOps()
@@ -90,11 +91,6 @@ end
 
 function _PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
     descriptor = PrimitiveDescriptor(InnerConstructor())
-    # Configure scratchpad mode to be "user" so we can apply our own scratchpads.
-    attributes = _get_attributes(args...)
-    @apicall dnnl_primitive_attr_set_scratchpad_mode(
-        attributes, Lib.dnnl_scratchpad_mode_user
-    )
     @apicall f(descriptor, args...)
     return descriptor
 end
@@ -153,18 +149,20 @@ function Base.append!(a::Attributes, p::PostOps)
 end
 
 appendsum!(p::PostOps, scale = 1) = @apicall dnnl_post_ops_append_sum(p, scale)
-
-# Utility for finding attributes from a list of arguments
-# TODO: Elide attaching a finalizer?
-_get_attributes(x, y...) = _get_attributes(y...)
-_get_attributes(x::Attributes, y...) = x
-_get_attributes() = error("No attributes found!")
-
 function query_md(descriptor::PrimitiveDescriptor, kind, index = 0)
     # TODO: Do we need to perform a null check here?
     ptr = Lib.dnnl_primitive_desc_query_md(descriptor, kind, index)
     return unsafe_load(ptr)
 end
+
+macro query(sym)
+    fullsym = Symbol("dnnl_query_$(sym)_md")
+    return :(Lib.$fullsym)
+end
+
+#####
+##### We manage our own global scratchpad here for now.
+#####
 
 SCRATCHPAD = UInt8[]
 
@@ -194,34 +192,29 @@ end
 
 # Automatically apply recursively to tuples.
 kernel_exit_hook(x) = x
-kernel_exit_hook(x::Union{<:Tuple, <:NamedTuple}) = map(kernel_exit_hook, x)
+kernel_exit_hook(x::Union{<:Tuple,<:NamedTuple}) = map(kernel_exit_hook, x)
 
 function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
     desc = _PrimitiveDescriptor(args...)
     primitive = _Primitive(desc)
     ret = f(primitive, desc)
-    ret_wrapped = wrap_tuple(ret)
-    maybe_destroy(walk_results(ret_wrapped, primitive))
-    maybe_destroy(walk_results(ret_wrapped, desc))
+
+    # If `desc` or `primitive` show up in the returned items from `f`, then attach a
+    # finalizer and don't eagerly destroy.
+    #
+    # If they don't show up, then assume it is safe to eagerly destroy them.
+    wrapped = tuplewrap(ret)
+    cleanup(desc, wrapped)
+    cleanup(primitive, wrapped)
     return kernel_exit_hook(ret)
 end
 
-wrap_tuple(x) = (x,)
-wrap_tuple(x::Tuple) = x
-wrap_tuple(x::NamedTuple) = Tuple(x)
+cleanup(x, ys::Tuple) = recursive_any(i -> i === x, ys) ? attach_finalizer!(x) : destroy(x)
 
-maybe_destroy(::Tuple{}) = nothing
-maybe_destroy(x) = destroy(x)
+tuplewrap(x) = (x,)
+tuplewrap(x::Tuple) = x
+tuplewrap(x::NamedTuple) = Tuple(x)
 
-walk_results(x::Tuple, y::Tuple{}) = ()
-walk_results(x::Tuple, y) = walk_results(Base.tail(x), maybe_finalize(x[1], y))
-walk_results(x::Tuple{}, y) = y
-walk_results(x::Tuple{}, y::Tuple{}) = y
-
-maybe_finalize(x, y) = y
-function maybe_finalize(x::T, y::T) where {T}
-    println("Attaching Finalizer!")
-    attach_finalizer!(y)
-    return ()
-end
-
+# Slightly better type inference then the generic `any`.
+recursive_any(f::F, x::Tuple) where {F} = f(x[1]) ? true : recursive_any(f, Base.tail(x))
+recursive_any(f::F, x::Tuple{}) where {F} = false

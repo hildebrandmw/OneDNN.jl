@@ -155,15 +155,15 @@ end
 
     function rand_in_range(lower, upper, ndims)
         return randn(
-            Float32, (rand(cdiv(lower, 4 * j):cdiv(upper, 4 * j)) for j = 1:ndims)...
+            Float32, (rand(cdiv(lower, 4 * j):cdiv(upper, 4 * j)) for j in 1:ndims)...
         )
     end
 
     dimension_to_array = Dict(
         map(1:length(chars)) do i
             # Cut down upper bound to try to conserve memory consumption.
-            return i => [rand_in_range(13, 512, i) for _ = 1:arrays_per_dim]
-        end
+            return i => [rand_in_range(13, 512, i) for _ in 1:arrays_per_dim]
+        end,
     )
     @show Base.summarysize(dimension_to_array)
 

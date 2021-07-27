@@ -2,8 +2,8 @@
 ##### Reorder
 #####
 
-function reorder(memorydesc::MemoryDesc, from::Memory)
-    to = similar(from, eltype(from), size(from), memorydesc)
+function reorder(md::MemoryDesc, from::Memory)
+    to = similar(from, eltype(from), size(from), md)
     reorder!(to, from)
     return kernel_exit_hook(to)
 end
@@ -16,8 +16,8 @@ function reorder!(to::Memory, from::Memory, attributes = noattributes())
         to,
         global_engine(),
         attributes,
-    ) do primitive, _
-        execute!(primitive, @dnnl_args to from)
+    ) do p, _
+        execute!(p, @dnnl_args to from)
     end
     return to
 end
@@ -52,20 +52,15 @@ end
 function eltwise!(
     dst::Memory,
     src::Memory,
-    kind::Lib.dnnl_alg_kind_t,
+    algo::Lib.dnnl_alg_kind_t,
     alpha = one(Float32),
     beta = zero(Float32),
 )
-    op_descriptor = Ref{Lib.dnnl_eltwise_desc_t}()
-    @apicall dnnl_eltwise_forward_desc_init(
-        op_descriptor, Lib.dnnl_forward_inference, kind, src, alpha, beta
-    )
+    opdesc = Ref{Lib.dnnl_eltwise_desc_t}()
+    @apicall dnnl_eltwise_forward_desc_init(opdesc, Inference(), algo, src, alpha, beta)
 
-    args = @dnnl_args dst src
-    temp_primitive(
-        op_descriptor, noattributes(), global_engine(), noforward()
-    ) do primitive, _
-        execute!(primitive, args)
+    temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do primitive, _
+        execute!(primitive, @dnnl_args dst src)
     end
     return dst
 end
@@ -101,10 +96,8 @@ function eltwise_backward!(
     beta = zero(Float32),
     use_dst_for_bwd::Bool = false,
 )
-    op_descriptor = Ref{Lib.dnnl_eltwise_desc_t}()
-    @apicall dnnl_eltwise_backward_desc_init(
-        op_descriptor, kind, diff_dst, data, alpha, beta
-    )
+    opdesc = Ref{Lib.dnnl_eltwise_desc_t}()
+    @apicall dnnl_eltwise_backward_desc_init(opdesc, kind, diff_dst, data, alpha, beta)
 
     if use_dst_for_bwd
         dst = data
@@ -114,10 +107,8 @@ function eltwise_backward!(
         args = @dnnl_args diff_src diff_dst src
     end
 
-    temp_primitive(
-        op_descriptor, noattributes(), global_engine(), noforward()
-    ) do primitive, _
-        execute!(primitive, args)
+    temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        execute!(p, args)
     end
     return diff_src
 end
@@ -205,12 +196,12 @@ function binary!(f::F, dst::Memory, src_0::Memory, src_1::Memory) where {F}
     return binary!(dst, src_0, src_1, binary_forward(f))
 end
 function binary!(dst::Memory, src_0::Memory, src_1::Memory, kind)
-    op_desc = Ref{Lib.dnnl_binary_desc_t}()
-    @apicall dnnl_binary_desc_init(op_desc, kind, src_0, src_1, dst)
+    opdesc = Ref{Lib.dnnl_binary_desc_t}()
+    @apicall dnnl_binary_desc_init(opdesc, kind, src_0, src_1, dst)
 
     args = @dnnl_args dst src_0 src_1
-    temp_primitive(op_desc, noattributes(), global_engine(), noforward()) do primitive, _
-        execute!(primitive, args)
+    temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        execute!(p, args)
     end
     return dst
 end
@@ -235,13 +226,12 @@ binary_forward(::typeof(min)) = Lib.dnnl_binary_min
 ##### Optimized Format Conversion.
 #####
 
+maybe_reorder(md::MemoryDesc, x::Memory) = (md == memorydesc(x)) ? x : reorder(md, x)
 function maybe_reorder(descriptor::PrimitiveDescriptor, x::Memory, key)
-    md = memorydesc(x)
-    md_opt = query_md(descriptor, key)
-
-    if md == md_opt
-        return x
-    end
-    return reorder(md_opt, x)
+    return maybe_reorder(query_md(descriptor, key), x)
 end
 
+reorder_if_any(::Ptr{MemoryDesc}, ::PrimitiveDescriptor, x::Memory, key) = x
+function reorder_if_any(md::MemoryDesc, desc::PrimitiveDescriptor, x::Memory, key)
+    return isany(md) ? maybe_reorder(desc, x, key) : x
+end

@@ -918,7 +918,7 @@ end
 end
 
 struct __JL_Ctag_10
-    data::NTuple{4, UInt8}
+    data::NTuple{4,UInt8}
 end
 
 function Base.getproperty(x::Ptr{__JL_Ctag_10}, f::Symbol)
@@ -935,12 +935,12 @@ function Base.getproperty(x::__JL_Ctag_10, f::Symbol)
 end
 
 function Base.setproperty!(x::Ptr{__JL_Ctag_10}, f::Symbol, v)
-    unsafe_store!(getproperty(x, f), v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 const dnnl_dim_t = Int64
 
-const dnnl_dims_t = NTuple{12, dnnl_dim_t}
+const dnnl_dims_t = NTuple{12,dnnl_dim_t}
 
 struct dnnl_blocking_desc_t
     strides::dnnl_dims_t
@@ -983,12 +983,12 @@ struct dnnl_rnn_packed_desc_t
     n_parts::Cint
     n::Cint
     ldb::Cint
-    parts::NTuple{4, Cint}
-    part_pack_size::NTuple{4, Csize_t}
-    pack_part::NTuple{4, Cuint}
+    parts::NTuple{4,Cint}
+    part_pack_size::NTuple{4,Csize_t}
+    pack_part::NTuple{4,Cuint}
     offset_compensation::Csize_t
     size::Csize_t
-    reserved::NTuple{200, Cchar}
+    reserved::NTuple{200,Cchar}
 end
 
 @cenum dnnl_memory_extra_flags_t::UInt32 begin
@@ -1006,11 +1006,11 @@ struct dnnl_memory_extra_desc_t
     compensation_mask::Cint
     scale_adjust::Cfloat
     asymm_compensation_mask::Cint
-    reserved::NTuple{60, Cchar}
+    reserved::NTuple{60,Cchar}
 end
 
 struct __JL_Ctag_89
-    data::NTuple{296, UInt8}
+    data::NTuple{296,UInt8}
 end
 
 function Base.getproperty(x::Ptr{__JL_Ctag_89}, f::Symbol)
@@ -1028,7 +1028,7 @@ function Base.getproperty(x::__JL_Ctag_89, f::Symbol)
 end
 
 function Base.setproperty!(x::Ptr{__JL_Ctag_89}, f::Symbol, v)
-    unsafe_store!(getproperty(x, f), v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 struct dnnl_memory_desc_t
@@ -1045,8 +1045,7 @@ struct dnnl_memory_desc_t
 end
 
 begin
-    mutable struct dnnl_memory
-    end
+    mutable struct dnnl_memory end
     function Base.cconvert(::Type{Ptr{dnnl_memory}}, x::Ptr{dnnl_memory})
         return x
     end
@@ -1083,7 +1082,7 @@ struct dnnl_convolution_desc_t
     diff_dst_desc::dnnl_memory_desc_t
     strides::dnnl_dims_t
     dilates::dnnl_dims_t
-    padding::NTuple{2, dnnl_dims_t}
+    padding::NTuple{2,dnnl_dims_t}
     accum_data_type::dnnl_data_type_t
 end
 
@@ -1127,7 +1126,7 @@ struct dnnl_pooling_desc_t
     diff_dst_desc::dnnl_memory_desc_t
     strides::dnnl_dims_t
     kernel::dnnl_dims_t
-    padding::NTuple{2, dnnl_dims_t}
+    padding::NTuple{2,dnnl_dims_t}
     accum_data_type::dnnl_data_type_t
 end
 
@@ -1141,7 +1140,7 @@ struct dnnl_pooling_v2_desc_t
     diff_dst_desc::dnnl_memory_desc_t
     strides::dnnl_dims_t
     kernel::dnnl_dims_t
-    padding::NTuple{2, dnnl_dims_t}
+    padding::NTuple{2,dnnl_dims_t}
     accum_data_type::dnnl_data_type_t
     dilation::dnnl_dims_t
 end
@@ -1253,7 +1252,7 @@ end
 struct dnnl_binary_desc_t
     primitive_kind::dnnl_primitive_kind_t
     alg_kind::dnnl_alg_kind_t
-    src_desc::NTuple{2, dnnl_memory_desc_t}
+    src_desc::NTuple{2,dnnl_memory_desc_t}
     dst_desc::dnnl_memory_desc_t
 end
 
@@ -1274,7 +1273,7 @@ struct dnnl_resampling_desc_t
     diff_src_desc::dnnl_memory_desc_t
     dst_desc::dnnl_memory_desc_t
     diff_dst_desc::dnnl_memory_desc_t
-    factors::NTuple{12, Cfloat}
+    factors::NTuple{12,Cfloat}
 end
 
 struct dnnl_reduction_desc_t
@@ -1293,8 +1292,7 @@ end
 end
 
 begin
-    mutable struct dnnl_engine
-    end
+    mutable struct dnnl_engine end
     function Base.cconvert(::Type{Ptr{dnnl_engine}}, x::Ptr{dnnl_engine})
         return x
     end
@@ -1312,19 +1310,27 @@ end
 const dnnl_engine_t = Ptr{dnnl_engine}
 
 begin
-    mutable struct dnnl_primitive_desc_iterator
-    end
-    function Base.cconvert(::Type{Ptr{dnnl_primitive_desc_iterator}}, x::Ptr{dnnl_primitive_desc_iterator})
+    mutable struct dnnl_primitive_desc_iterator end
+    function Base.cconvert(
+        ::Type{Ptr{dnnl_primitive_desc_iterator}}, x::Ptr{dnnl_primitive_desc_iterator}
+    )
         return x
     end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_desc_iterator}}, x::Ptr)
-        return error("Refusing to convert $(typeof(x)) to a Ptr{$(dnnl_primitive_desc_iterator)}!")
+        return error(
+            "Refusing to convert $(typeof(x)) to a Ptr{$(dnnl_primitive_desc_iterator)}!"
+        )
     end
-    function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_desc_iterator}}}, x::Ptr{Ptr{dnnl_primitive_desc_iterator}})
+    function Base.cconvert(
+        ::Type{Ptr{Ptr{dnnl_primitive_desc_iterator}}},
+        x::Ptr{Ptr{dnnl_primitive_desc_iterator}},
+    )
         return x
     end
     function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_desc_iterator}}}, x::Ptr)
-        return error("Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_desc_iterator)}}!")
+        return error(
+            "Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_desc_iterator)}}!",
+        )
     end
 end
 
@@ -1333,19 +1339,22 @@ const dnnl_primitive_desc_iterator_t = Ptr{dnnl_primitive_desc_iterator}
 const const_dnnl_primitive_desc_iterator_t = Ptr{dnnl_primitive_desc_iterator}
 
 begin
-    mutable struct dnnl_primitive_desc
-    end
+    mutable struct dnnl_primitive_desc end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_desc}}, x::Ptr{dnnl_primitive_desc})
         return x
     end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_desc}}, x::Ptr)
         return error("Refusing to convert $(typeof(x)) to a Ptr{$(dnnl_primitive_desc)}!")
     end
-    function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_desc}}}, x::Ptr{Ptr{dnnl_primitive_desc}})
+    function Base.cconvert(
+        ::Type{Ptr{Ptr{dnnl_primitive_desc}}}, x::Ptr{Ptr{dnnl_primitive_desc}}
+    )
         return x
     end
     function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_desc}}}, x::Ptr)
-        return error("Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_desc)}}!")
+        return error(
+            "Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_desc)}}!"
+        )
     end
 end
 
@@ -1359,19 +1368,22 @@ const const_dnnl_primitive_desc_t = Ptr{dnnl_primitive_desc}
 end
 
 begin
-    mutable struct dnnl_primitive_attr
-    end
+    mutable struct dnnl_primitive_attr end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_attr}}, x::Ptr{dnnl_primitive_attr})
         return x
     end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_attr}}, x::Ptr)
         return error("Refusing to convert $(typeof(x)) to a Ptr{$(dnnl_primitive_attr)}!")
     end
-    function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_attr}}}, x::Ptr{Ptr{dnnl_primitive_attr}})
+    function Base.cconvert(
+        ::Type{Ptr{Ptr{dnnl_primitive_attr}}}, x::Ptr{Ptr{dnnl_primitive_attr}}
+    )
         return x
     end
     function Base.cconvert(::Type{Ptr{Ptr{dnnl_primitive_attr}}}, x::Ptr)
-        return error("Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_attr)}}!")
+        return error(
+            "Refusing to convert $(typeof(x)) to a Ptr{Ptr{$(dnnl_primitive_attr)}}!"
+        )
     end
 end
 
@@ -1380,8 +1392,7 @@ const dnnl_primitive_attr_t = Ptr{dnnl_primitive_attr}
 const const_dnnl_primitive_attr_t = Ptr{dnnl_primitive_attr}
 
 begin
-    mutable struct dnnl_post_ops
-    end
+    mutable struct dnnl_post_ops end
     function Base.cconvert(::Type{Ptr{dnnl_post_ops}}, x::Ptr{dnnl_post_ops})
         return x
     end
@@ -1401,8 +1412,7 @@ const dnnl_post_ops_t = Ptr{dnnl_post_ops}
 const const_dnnl_post_ops_t = Ptr{dnnl_post_ops}
 
 begin
-    mutable struct dnnl_primitive
-    end
+    mutable struct dnnl_primitive end
     function Base.cconvert(::Type{Ptr{dnnl_primitive}}, x::Ptr{dnnl_primitive})
         return x
     end
@@ -1480,8 +1490,7 @@ end
 end
 
 begin
-    mutable struct dnnl_stream
-    end
+    mutable struct dnnl_stream end
     function Base.cconvert(::Type{Ptr{dnnl_stream}}, x::Ptr{dnnl_stream})
         return x
     end
@@ -1528,600 +1537,3121 @@ end
     dnnl_cpu_isa_prefer_ymm = 1
 end
 
-function dnnl_primitive_desc_iterator_create(iterator, op_desc, attr, engine, hint_forward_primitive_desc)
-    ccall((:dnnl_primitive_desc_iterator_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_iterator_t}, const_dnnl_op_desc_t, const_dnnl_primitive_attr_t, dnnl_engine_t, const_dnnl_primitive_desc_t), iterator, op_desc, attr, engine, hint_forward_primitive_desc)
+function dnnl_primitive_desc_iterator_create(
+    iterator, op_desc, attr, engine, hint_forward_primitive_desc
+)
+    return ccall(
+        (:dnnl_primitive_desc_iterator_create, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_primitive_desc_iterator_t},
+            const_dnnl_op_desc_t,
+            const_dnnl_primitive_attr_t,
+            dnnl_engine_t,
+            const_dnnl_primitive_desc_t,
+        ),
+        iterator,
+        op_desc,
+        attr,
+        engine,
+        hint_forward_primitive_desc,
+    )
 end
 
 function dnnl_primitive_desc_iterator_next(iterator)
-    ccall((:dnnl_primitive_desc_iterator_next, libdnnl), dnnl_status_t, (dnnl_primitive_desc_iterator_t,), iterator)
+    return ccall(
+        (:dnnl_primitive_desc_iterator_next, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_desc_iterator_t,),
+        iterator,
+    )
 end
 
 function dnnl_primitive_desc_iterator_fetch(iterator)
-    ccall((:dnnl_primitive_desc_iterator_fetch, libdnnl), dnnl_primitive_desc_t, (const_dnnl_primitive_desc_iterator_t,), iterator)
+    return ccall(
+        (:dnnl_primitive_desc_iterator_fetch, libdnnl),
+        dnnl_primitive_desc_t,
+        (const_dnnl_primitive_desc_iterator_t,),
+        iterator,
+    )
 end
 
 function dnnl_primitive_desc_iterator_destroy(iterator)
-    ccall((:dnnl_primitive_desc_iterator_destroy, libdnnl), dnnl_status_t, (dnnl_primitive_desc_iterator_t,), iterator)
+    return ccall(
+        (:dnnl_primitive_desc_iterator_destroy, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_desc_iterator_t,),
+        iterator,
+    )
 end
 
-function dnnl_primitive_desc_create(primitive_desc, op_desc, attr, engine, hint_forward_primitive_desc)
-    ccall((:dnnl_primitive_desc_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_t}, const_dnnl_op_desc_t, const_dnnl_primitive_attr_t, dnnl_engine_t, const_dnnl_primitive_desc_t), primitive_desc, op_desc, attr, engine, hint_forward_primitive_desc)
+function dnnl_primitive_desc_create(
+    primitive_desc, op_desc, attr, engine, hint_forward_primitive_desc
+)
+    return ccall(
+        (:dnnl_primitive_desc_create, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_primitive_desc_t},
+            const_dnnl_op_desc_t,
+            const_dnnl_primitive_attr_t,
+            dnnl_engine_t,
+            const_dnnl_primitive_desc_t,
+        ),
+        primitive_desc,
+        op_desc,
+        attr,
+        engine,
+        hint_forward_primitive_desc,
+    )
 end
 
 function dnnl_primitive_desc_clone(primitive_desc, existing_primitive_desc)
-    ccall((:dnnl_primitive_desc_clone, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_t}, const_dnnl_primitive_desc_t), primitive_desc, existing_primitive_desc)
+    return ccall(
+        (:dnnl_primitive_desc_clone, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_primitive_desc_t}, const_dnnl_primitive_desc_t),
+        primitive_desc,
+        existing_primitive_desc,
+    )
 end
 
 function dnnl_primitive_desc_get_attr(primitive_desc, attr)
-    ccall((:dnnl_primitive_desc_get_attr, libdnnl), dnnl_status_t, (const_dnnl_primitive_desc_t, Ptr{const_dnnl_primitive_attr_t}), primitive_desc, attr)
+    return ccall(
+        (:dnnl_primitive_desc_get_attr, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_desc_t, Ptr{const_dnnl_primitive_attr_t}),
+        primitive_desc,
+        attr,
+    )
 end
 
 function dnnl_primitive_desc_destroy(primitive_desc)
-    ccall((:dnnl_primitive_desc_destroy, libdnnl), dnnl_status_t, (dnnl_primitive_desc_t,), primitive_desc)
+    return ccall(
+        (:dnnl_primitive_desc_destroy, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_desc_t,),
+        primitive_desc,
+    )
 end
 
 function dnnl_primitive_desc_query(primitive_desc, what, index, result)
-    ccall((:dnnl_primitive_desc_query, libdnnl), dnnl_status_t, (const_dnnl_primitive_desc_t, dnnl_query_t, Cint, Ptr{Cvoid}), primitive_desc, what, index, result)
+    return ccall(
+        (:dnnl_primitive_desc_query, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_desc_t, dnnl_query_t, Cint, Ptr{Cvoid}),
+        primitive_desc,
+        what,
+        index,
+        result,
+    )
 end
 
 function dnnl_primitive_desc_query_md(primitive_desc, what, index)
-    ccall((:dnnl_primitive_desc_query_md, libdnnl), Ptr{dnnl_memory_desc_t}, (const_dnnl_primitive_desc_t, dnnl_query_t, Cint), primitive_desc, what, index)
+    return ccall(
+        (:dnnl_primitive_desc_query_md, libdnnl),
+        Ptr{dnnl_memory_desc_t},
+        (const_dnnl_primitive_desc_t, dnnl_query_t, Cint),
+        primitive_desc,
+        what,
+        index,
+    )
 end
 
 function dnnl_primitive_desc_query_s32(primitive_desc, what, index)
-    ccall((:dnnl_primitive_desc_query_s32, libdnnl), Cint, (const_dnnl_primitive_desc_t, dnnl_query_t, Cint), primitive_desc, what, index)
+    return ccall(
+        (:dnnl_primitive_desc_query_s32, libdnnl),
+        Cint,
+        (const_dnnl_primitive_desc_t, dnnl_query_t, Cint),
+        primitive_desc,
+        what,
+        index,
+    )
 end
 
 function dnnl_primitive_create(primitive, primitive_desc)
-    ccall((:dnnl_primitive_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_t}, const_dnnl_primitive_desc_t), primitive, primitive_desc)
+    return ccall(
+        (:dnnl_primitive_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_primitive_t}, const_dnnl_primitive_desc_t),
+        primitive,
+        primitive_desc,
+    )
 end
 
 function dnnl_primitive_execute(primitive, stream, nargs, args)
-    ccall((:dnnl_primitive_execute, libdnnl), dnnl_status_t, (const_dnnl_primitive_t, dnnl_stream_t, Cint, Ptr{dnnl_exec_arg_t}), primitive, stream, nargs, args)
+    return ccall(
+        (:dnnl_primitive_execute, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_t, dnnl_stream_t, Cint, Ptr{dnnl_exec_arg_t}),
+        primitive,
+        stream,
+        nargs,
+        args,
+    )
 end
 
 function dnnl_primitive_get_primitive_desc(primitive, primitive_desc)
-    ccall((:dnnl_primitive_get_primitive_desc, libdnnl), dnnl_status_t, (const_dnnl_primitive_t, Ptr{const_dnnl_primitive_desc_t}), primitive, primitive_desc)
+    return ccall(
+        (:dnnl_primitive_get_primitive_desc, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_t, Ptr{const_dnnl_primitive_desc_t}),
+        primitive,
+        primitive_desc,
+    )
 end
 
 function dnnl_primitive_destroy(primitive)
-    ccall((:dnnl_primitive_destroy, libdnnl), dnnl_status_t, (dnnl_primitive_t,), primitive)
+    return ccall(
+        (:dnnl_primitive_destroy, libdnnl), dnnl_status_t, (dnnl_primitive_t,), primitive
+    )
 end
 
 function dnnl_primitive_attr_create(attr)
-    ccall((:dnnl_primitive_attr_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_attr_t},), attr)
+    return ccall(
+        (:dnnl_primitive_attr_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_primitive_attr_t},),
+        attr,
+    )
 end
 
 function dnnl_primitive_attr_clone(attr, existing_attr)
-    ccall((:dnnl_primitive_attr_clone, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_attr_t}, const_dnnl_primitive_attr_t), attr, existing_attr)
+    return ccall(
+        (:dnnl_primitive_attr_clone, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_primitive_attr_t}, const_dnnl_primitive_attr_t),
+        attr,
+        existing_attr,
+    )
 end
 
 function dnnl_primitive_attr_destroy(attr)
-    ccall((:dnnl_primitive_attr_destroy, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t,), attr)
+    return ccall(
+        (:dnnl_primitive_attr_destroy, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t,),
+        attr,
+    )
 end
 
 function dnnl_primitive_attr_get_scratchpad_mode(attr, mode)
-    ccall((:dnnl_primitive_attr_get_scratchpad_mode, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{dnnl_scratchpad_mode_t}), attr, mode)
+    return ccall(
+        (:dnnl_primitive_attr_get_scratchpad_mode, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{dnnl_scratchpad_mode_t}),
+        attr,
+        mode,
+    )
 end
 
 function dnnl_primitive_attr_set_scratchpad_mode(attr, mode)
-    ccall((:dnnl_primitive_attr_set_scratchpad_mode, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, dnnl_scratchpad_mode_t), attr, mode)
+    return ccall(
+        (:dnnl_primitive_attr_set_scratchpad_mode, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, dnnl_scratchpad_mode_t),
+        attr,
+        mode,
+    )
 end
 
 function dnnl_primitive_attr_get_output_scales(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_get_output_scales, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_get_output_scales, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_set_output_scales(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_set_output_scales, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_set_output_scales, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_get_scales(attr, arg, count, mask, scales)
-    ccall((:dnnl_primitive_attr_get_scales, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, Cint, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), attr, arg, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_get_scales, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, Cint, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}),
+        attr,
+        arg,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_set_scales(attr, arg, count, mask, scales)
-    ccall((:dnnl_primitive_attr_set_scales, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, Cint, dnnl_dim_t, Cint, Ptr{Cfloat}), attr, arg, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_set_scales, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, Cint, dnnl_dim_t, Cint, Ptr{Cfloat}),
+        attr,
+        arg,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_get_zero_points(attr, arg, count, mask, zero_points)
-    ccall((:dnnl_primitive_attr_get_zero_points, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Cint, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Int32}}), attr, arg, count, mask, zero_points)
+    return ccall(
+        (:dnnl_primitive_attr_get_zero_points, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Cint, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Int32}}),
+        attr,
+        arg,
+        count,
+        mask,
+        zero_points,
+    )
 end
 
 function dnnl_primitive_attr_set_zero_points(attr, arg, count, mask, zero_points)
-    ccall((:dnnl_primitive_attr_set_zero_points, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, Cint, dnnl_dim_t, Cint, Ptr{Int32}), attr, arg, count, mask, zero_points)
+    return ccall(
+        (:dnnl_primitive_attr_set_zero_points, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, Cint, dnnl_dim_t, Cint, Ptr{Int32}),
+        attr,
+        arg,
+        count,
+        mask,
+        zero_points,
+    )
 end
 
 function dnnl_primitive_attr_get_post_ops(attr, post_ops)
-    ccall((:dnnl_primitive_attr_get_post_ops, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{const_dnnl_post_ops_t}), attr, post_ops)
+    return ccall(
+        (:dnnl_primitive_attr_get_post_ops, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{const_dnnl_post_ops_t}),
+        attr,
+        post_ops,
+    )
 end
 
 function dnnl_primitive_attr_set_post_ops(attr, post_ops)
-    ccall((:dnnl_primitive_attr_set_post_ops, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, const_dnnl_post_ops_t), attr, post_ops)
+    return ccall(
+        (:dnnl_primitive_attr_set_post_ops, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, const_dnnl_post_ops_t),
+        attr,
+        post_ops,
+    )
 end
 
 function dnnl_post_ops_create(post_ops)
-    ccall((:dnnl_post_ops_create, libdnnl), dnnl_status_t, (Ptr{dnnl_post_ops_t},), post_ops)
+    return ccall(
+        (:dnnl_post_ops_create, libdnnl), dnnl_status_t, (Ptr{dnnl_post_ops_t},), post_ops
+    )
 end
 
 function dnnl_post_ops_destroy(post_ops)
-    ccall((:dnnl_post_ops_destroy, libdnnl), dnnl_status_t, (dnnl_post_ops_t,), post_ops)
+    return ccall(
+        (:dnnl_post_ops_destroy, libdnnl), dnnl_status_t, (dnnl_post_ops_t,), post_ops
+    )
 end
 
 function dnnl_post_ops_len(post_ops)
-    ccall((:dnnl_post_ops_len, libdnnl), Cint, (const_dnnl_post_ops_t,), post_ops)
+    return ccall((:dnnl_post_ops_len, libdnnl), Cint, (const_dnnl_post_ops_t,), post_ops)
 end
 
 function dnnl_post_ops_get_kind(post_ops, index)
-    ccall((:dnnl_post_ops_get_kind, libdnnl), dnnl_primitive_kind_t, (const_dnnl_post_ops_t, Cint), post_ops, index)
+    return ccall(
+        (:dnnl_post_ops_get_kind, libdnnl),
+        dnnl_primitive_kind_t,
+        (const_dnnl_post_ops_t, Cint),
+        post_ops,
+        index,
+    )
 end
 
 function dnnl_post_ops_append_sum(post_ops, scale)
-    ccall((:dnnl_post_ops_append_sum, libdnnl), dnnl_status_t, (dnnl_post_ops_t, Cfloat), post_ops, scale)
+    return ccall(
+        (:dnnl_post_ops_append_sum, libdnnl),
+        dnnl_status_t,
+        (dnnl_post_ops_t, Cfloat),
+        post_ops,
+        scale,
+    )
 end
 
 function dnnl_post_ops_append_sum_v2(post_ops, scale, data_type)
-    ccall((:dnnl_post_ops_append_sum_v2, libdnnl), dnnl_status_t, (dnnl_post_ops_t, Cfloat, dnnl_data_type_t), post_ops, scale, data_type)
+    return ccall(
+        (:dnnl_post_ops_append_sum_v2, libdnnl),
+        dnnl_status_t,
+        (dnnl_post_ops_t, Cfloat, dnnl_data_type_t),
+        post_ops,
+        scale,
+        data_type,
+    )
 end
 
 function dnnl_post_ops_get_params_sum(post_ops, index, scale)
-    ccall((:dnnl_post_ops_get_params_sum, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{Cfloat}), post_ops, index, scale)
+    return ccall(
+        (:dnnl_post_ops_get_params_sum, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_post_ops_t, Cint, Ptr{Cfloat}),
+        post_ops,
+        index,
+        scale,
+    )
 end
 
 function dnnl_post_ops_get_params_sum_v2(post_ops, index, scale, data_type)
-    ccall((:dnnl_post_ops_get_params_sum_v2, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{Cfloat}, Ptr{dnnl_data_type_t}), post_ops, index, scale, data_type)
+    return ccall(
+        (:dnnl_post_ops_get_params_sum_v2, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_post_ops_t, Cint, Ptr{Cfloat}, Ptr{dnnl_data_type_t}),
+        post_ops,
+        index,
+        scale,
+        data_type,
+    )
 end
 
 function dnnl_post_ops_append_eltwise(post_ops, scale, alg_kind, alpha, beta)
-    ccall((:dnnl_post_ops_append_eltwise, libdnnl), dnnl_status_t, (dnnl_post_ops_t, Cfloat, dnnl_alg_kind_t, Cfloat, Cfloat), post_ops, scale, alg_kind, alpha, beta)
+    return ccall(
+        (:dnnl_post_ops_append_eltwise, libdnnl),
+        dnnl_status_t,
+        (dnnl_post_ops_t, Cfloat, dnnl_alg_kind_t, Cfloat, Cfloat),
+        post_ops,
+        scale,
+        alg_kind,
+        alpha,
+        beta,
+    )
 end
 
 function dnnl_post_ops_get_params_eltwise(post_ops, index, scale, alg_kind, alpha, beta)
-    ccall((:dnnl_post_ops_get_params_eltwise, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{Cfloat}, Ptr{dnnl_alg_kind_t}, Ptr{Cfloat}, Ptr{Cfloat}), post_ops, index, scale, alg_kind, alpha, beta)
+    return ccall(
+        (:dnnl_post_ops_get_params_eltwise, libdnnl),
+        dnnl_status_t,
+        (
+            const_dnnl_post_ops_t,
+            Cint,
+            Ptr{Cfloat},
+            Ptr{dnnl_alg_kind_t},
+            Ptr{Cfloat},
+            Ptr{Cfloat},
+        ),
+        post_ops,
+        index,
+        scale,
+        alg_kind,
+        alpha,
+        beta,
+    )
 end
 
-function dnnl_post_ops_append_dw_k3s1p1(post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
-    ccall((:dnnl_post_ops_append_dw_k3s1p1, libdnnl), dnnl_status_t, (dnnl_post_ops_t, dnnl_data_type_t, dnnl_data_type_t, dnnl_data_type_t, dnnl_dim_t, Cint, Ptr{Cfloat}), post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
+function dnnl_post_ops_append_dw_k3s1p1(
+    post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales
+)
+    return ccall(
+        (:dnnl_post_ops_append_dw_k3s1p1, libdnnl),
+        dnnl_status_t,
+        (
+            dnnl_post_ops_t,
+            dnnl_data_type_t,
+            dnnl_data_type_t,
+            dnnl_data_type_t,
+            dnnl_dim_t,
+            Cint,
+            Ptr{Cfloat},
+        ),
+        post_ops,
+        weights_data_type,
+        bias_data_type,
+        dst_data_type,
+        count,
+        mask,
+        scales,
+    )
 end
 
-function dnnl_post_ops_get_params_dw_k3s1p1(post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
-    ccall((:dnnl_post_ops_get_params_dw_k3s1p1, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{dnnl_data_type_t}, Ptr{dnnl_data_type_t}, Ptr{dnnl_data_type_t}, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
+function dnnl_post_ops_get_params_dw_k3s1p1(
+    post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales
+)
+    return ccall(
+        (:dnnl_post_ops_get_params_dw_k3s1p1, libdnnl),
+        dnnl_status_t,
+        (
+            const_dnnl_post_ops_t,
+            Cint,
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_dim_t},
+            Ptr{Cint},
+            Ptr{Ptr{Cfloat}},
+        ),
+        post_ops,
+        index,
+        weights_data_type,
+        bias_data_type,
+        dst_data_type,
+        count,
+        mask,
+        scales,
+    )
 end
 
-function dnnl_post_ops_append_dw_k3s2p1(post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
-    ccall((:dnnl_post_ops_append_dw_k3s2p1, libdnnl), dnnl_status_t, (dnnl_post_ops_t, dnnl_data_type_t, dnnl_data_type_t, dnnl_data_type_t, dnnl_dim_t, Cint, Ptr{Cfloat}), post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
+function dnnl_post_ops_append_dw_k3s2p1(
+    post_ops, weights_data_type, bias_data_type, dst_data_type, count, mask, scales
+)
+    return ccall(
+        (:dnnl_post_ops_append_dw_k3s2p1, libdnnl),
+        dnnl_status_t,
+        (
+            dnnl_post_ops_t,
+            dnnl_data_type_t,
+            dnnl_data_type_t,
+            dnnl_data_type_t,
+            dnnl_dim_t,
+            Cint,
+            Ptr{Cfloat},
+        ),
+        post_ops,
+        weights_data_type,
+        bias_data_type,
+        dst_data_type,
+        count,
+        mask,
+        scales,
+    )
 end
 
-function dnnl_post_ops_get_params_dw_k3s2p1(post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
-    ccall((:dnnl_post_ops_get_params_dw_k3s2p1, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{dnnl_data_type_t}, Ptr{dnnl_data_type_t}, Ptr{dnnl_data_type_t}, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales)
+function dnnl_post_ops_get_params_dw_k3s2p1(
+    post_ops, index, weights_data_type, bias_data_type, dst_data_type, count, mask, scales
+)
+    return ccall(
+        (:dnnl_post_ops_get_params_dw_k3s2p1, libdnnl),
+        dnnl_status_t,
+        (
+            const_dnnl_post_ops_t,
+            Cint,
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_data_type_t},
+            Ptr{dnnl_dim_t},
+            Ptr{Cint},
+            Ptr{Ptr{Cfloat}},
+        ),
+        post_ops,
+        index,
+        weights_data_type,
+        bias_data_type,
+        dst_data_type,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_post_ops_append_binary(post_ops, alg_kind, src1_desc)
-    ccall((:dnnl_post_ops_append_binary, libdnnl), dnnl_status_t, (dnnl_post_ops_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}), post_ops, alg_kind, src1_desc)
+    return ccall(
+        (:dnnl_post_ops_append_binary, libdnnl),
+        dnnl_status_t,
+        (dnnl_post_ops_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}),
+        post_ops,
+        alg_kind,
+        src1_desc,
+    )
 end
 
 function dnnl_post_ops_get_params_binary(post_ops, index, alg_kind, src1_desc)
-    ccall((:dnnl_post_ops_get_params_binary, libdnnl), dnnl_status_t, (const_dnnl_post_ops_t, Cint, Ptr{dnnl_alg_kind_t}, Ptr{Ptr{dnnl_memory_desc_t}}), post_ops, index, alg_kind, src1_desc)
+    return ccall(
+        (:dnnl_post_ops_get_params_binary, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_post_ops_t, Cint, Ptr{dnnl_alg_kind_t}, Ptr{Ptr{dnnl_memory_desc_t}}),
+        post_ops,
+        index,
+        alg_kind,
+        src1_desc,
+    )
 end
 
 function dnnl_memory_desc_init_by_strides(memory_desc, ndims, dims, data_type, strides)
-    ccall((:dnnl_memory_desc_init_by_strides, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}, dnnl_data_type_t, Ptr{Clong}), memory_desc, ndims, dims, data_type, strides)
+    return ccall(
+        (:dnnl_memory_desc_init_by_strides, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}, dnnl_data_type_t, Ptr{Clong}),
+        memory_desc,
+        ndims,
+        dims,
+        data_type,
+        strides,
+    )
 end
 
 function dnnl_memory_desc_init_by_tag(memory_desc, ndims, dims, data_type, tag)
-    ccall((:dnnl_memory_desc_init_by_tag, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}, dnnl_data_type_t, dnnl_format_tag_t), memory_desc, ndims, dims, data_type, tag)
+    return ccall(
+        (:dnnl_memory_desc_init_by_tag, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}, dnnl_data_type_t, dnnl_format_tag_t),
+        memory_desc,
+        ndims,
+        dims,
+        data_type,
+        tag,
+    )
 end
 
 function dnnl_memory_desc_init_submemory(memory_desc, parent_memory_desc, dims, offsets)
-    ccall((:dnnl_memory_desc_init_submemory, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}), memory_desc, parent_memory_desc, dims, offsets)
+    return ccall(
+        (:dnnl_memory_desc_init_submemory, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}),
+        memory_desc,
+        parent_memory_desc,
+        dims,
+        offsets,
+    )
 end
 
 function dnnl_memory_desc_reshape(out_memory_desc, in_memory_desc, ndims, dims)
-    ccall((:dnnl_memory_desc_reshape, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}), out_memory_desc, in_memory_desc, ndims, dims)
+    return ccall(
+        (:dnnl_memory_desc_reshape, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, Ptr{Clong}),
+        out_memory_desc,
+        in_memory_desc,
+        ndims,
+        dims,
+    )
 end
 
 function dnnl_memory_desc_permute_axes(out_memory_desc, in_memory_desc, permutation)
-    ccall((:dnnl_memory_desc_permute_axes, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Cint}), out_memory_desc, in_memory_desc, permutation)
+    return ccall(
+        (:dnnl_memory_desc_permute_axes, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Cint}),
+        out_memory_desc,
+        in_memory_desc,
+        permutation,
+    )
 end
 
 function dnnl_memory_desc_equal(lhs, rhs)
-    ccall((:dnnl_memory_desc_equal, libdnnl), Cint, (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), lhs, rhs)
+    return ccall(
+        (:dnnl_memory_desc_equal, libdnnl),
+        Cint,
+        (Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}),
+        lhs,
+        rhs,
+    )
 end
 
 function dnnl_memory_desc_get_size(memory_desc)
-    ccall((:dnnl_memory_desc_get_size, libdnnl), Csize_t, (Ptr{dnnl_memory_desc_t},), memory_desc)
+    return ccall(
+        (:dnnl_memory_desc_get_size, libdnnl),
+        Csize_t,
+        (Ptr{dnnl_memory_desc_t},),
+        memory_desc,
+    )
 end
 
 function dnnl_data_type_size(data_type)
-    ccall((:dnnl_data_type_size, libdnnl), Csize_t, (dnnl_data_type_t,), data_type)
+    return ccall((:dnnl_data_type_size, libdnnl), Csize_t, (dnnl_data_type_t,), data_type)
 end
 
 function dnnl_memory_create(memory, memory_desc, engine, handle)
-    ccall((:dnnl_memory_create, libdnnl), dnnl_status_t, (Ptr{dnnl_memory_t}, Ptr{dnnl_memory_desc_t}, dnnl_engine_t, Ptr{Cvoid}), memory, memory_desc, engine, handle)
+    return ccall(
+        (:dnnl_memory_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_memory_t}, Ptr{dnnl_memory_desc_t}, dnnl_engine_t, Ptr{Cvoid}),
+        memory,
+        memory_desc,
+        engine,
+        handle,
+    )
 end
 
 function dnnl_memory_get_memory_desc(memory, memory_desc)
-    ccall((:dnnl_memory_get_memory_desc, libdnnl), dnnl_status_t, (const_dnnl_memory_t, Ptr{Ptr{dnnl_memory_desc_t}}), memory, memory_desc)
+    return ccall(
+        (:dnnl_memory_get_memory_desc, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_memory_t, Ptr{Ptr{dnnl_memory_desc_t}}),
+        memory,
+        memory_desc,
+    )
 end
 
 function dnnl_memory_get_engine(memory, engine)
-    ccall((:dnnl_memory_get_engine, libdnnl), dnnl_status_t, (const_dnnl_memory_t, Ptr{dnnl_engine_t}), memory, engine)
+    return ccall(
+        (:dnnl_memory_get_engine, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_memory_t, Ptr{dnnl_engine_t}),
+        memory,
+        engine,
+    )
 end
 
 function dnnl_memory_map_data(memory, mapped_ptr)
-    ccall((:dnnl_memory_map_data, libdnnl), dnnl_status_t, (const_dnnl_memory_t, Ptr{Ptr{Cvoid}}), memory, mapped_ptr)
+    return ccall(
+        (:dnnl_memory_map_data, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_memory_t, Ptr{Ptr{Cvoid}}),
+        memory,
+        mapped_ptr,
+    )
 end
 
 function dnnl_memory_unmap_data(memory, mapped_ptr)
-    ccall((:dnnl_memory_unmap_data, libdnnl), dnnl_status_t, (const_dnnl_memory_t, Ptr{Cvoid}), memory, mapped_ptr)
+    return ccall(
+        (:dnnl_memory_unmap_data, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_memory_t, Ptr{Cvoid}),
+        memory,
+        mapped_ptr,
+    )
 end
 
 function dnnl_memory_get_data_handle(memory, handle)
-    ccall((:dnnl_memory_get_data_handle, libdnnl), dnnl_status_t, (const_dnnl_memory_t, Ptr{Ptr{Cvoid}}), memory, handle)
+    return ccall(
+        (:dnnl_memory_get_data_handle, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_memory_t, Ptr{Ptr{Cvoid}}),
+        memory,
+        handle,
+    )
 end
 
 function dnnl_memory_set_data_handle(memory, handle)
-    ccall((:dnnl_memory_set_data_handle, libdnnl), dnnl_status_t, (dnnl_memory_t, Ptr{Cvoid}), memory, handle)
+    return ccall(
+        (:dnnl_memory_set_data_handle, libdnnl),
+        dnnl_status_t,
+        (dnnl_memory_t, Ptr{Cvoid}),
+        memory,
+        handle,
+    )
 end
 
 function dnnl_memory_set_data_handle_v2(memory, handle, stream)
-    ccall((:dnnl_memory_set_data_handle_v2, libdnnl), dnnl_status_t, (dnnl_memory_t, Ptr{Cvoid}, dnnl_stream_t), memory, handle, stream)
+    return ccall(
+        (:dnnl_memory_set_data_handle_v2, libdnnl),
+        dnnl_status_t,
+        (dnnl_memory_t, Ptr{Cvoid}, dnnl_stream_t),
+        memory,
+        handle,
+        stream,
+    )
 end
 
 function dnnl_memory_destroy(memory)
-    ccall((:dnnl_memory_destroy, libdnnl), dnnl_status_t, (dnnl_memory_t,), memory)
+    return ccall((:dnnl_memory_destroy, libdnnl), dnnl_status_t, (dnnl_memory_t,), memory)
 end
 
-function dnnl_reorder_primitive_desc_create(reorder_primitive_desc, src_desc, src_engine, dst_desc, dst_engine, attr)
-    ccall((:dnnl_reorder_primitive_desc_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_t}, Ptr{dnnl_memory_desc_t}, dnnl_engine_t, Ptr{dnnl_memory_desc_t}, dnnl_engine_t, const_dnnl_primitive_attr_t), reorder_primitive_desc, src_desc, src_engine, dst_desc, dst_engine, attr)
+function dnnl_reorder_primitive_desc_create(
+    reorder_primitive_desc, src_desc, src_engine, dst_desc, dst_engine, attr
+)
+    return ccall(
+        (:dnnl_reorder_primitive_desc_create, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_primitive_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            dnnl_engine_t,
+            Ptr{dnnl_memory_desc_t},
+            dnnl_engine_t,
+            const_dnnl_primitive_attr_t,
+        ),
+        reorder_primitive_desc,
+        src_desc,
+        src_engine,
+        dst_desc,
+        dst_engine,
+        attr,
+    )
 end
 
-function dnnl_concat_primitive_desc_create(concat_primitive_desc, dst_desc, n, concat_dimension, src_descs, attr, engine)
-    ccall((:dnnl_concat_primitive_desc_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, Cint, Ptr{dnnl_memory_desc_t}, const_dnnl_primitive_attr_t, dnnl_engine_t), concat_primitive_desc, dst_desc, n, concat_dimension, src_descs, attr, engine)
+function dnnl_concat_primitive_desc_create(
+    concat_primitive_desc, dst_desc, n, concat_dimension, src_descs, attr, engine
+)
+    return ccall(
+        (:dnnl_concat_primitive_desc_create, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_primitive_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cint,
+            Cint,
+            Ptr{dnnl_memory_desc_t},
+            const_dnnl_primitive_attr_t,
+            dnnl_engine_t,
+        ),
+        concat_primitive_desc,
+        dst_desc,
+        n,
+        concat_dimension,
+        src_descs,
+        attr,
+        engine,
+    )
 end
 
-function dnnl_sum_primitive_desc_create(sum_primitive_desc, dst_desc, n, scales, src_descs, attr, engine)
-    ccall((:dnnl_sum_primitive_desc_create, libdnnl), dnnl_status_t, (Ptr{dnnl_primitive_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, Ptr{Cfloat}, Ptr{dnnl_memory_desc_t}, const_dnnl_primitive_attr_t, dnnl_engine_t), sum_primitive_desc, dst_desc, n, scales, src_descs, attr, engine)
+function dnnl_sum_primitive_desc_create(
+    sum_primitive_desc, dst_desc, n, scales, src_descs, attr, engine
+)
+    return ccall(
+        (:dnnl_sum_primitive_desc_create, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_primitive_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cint,
+            Ptr{Cfloat},
+            Ptr{dnnl_memory_desc_t},
+            const_dnnl_primitive_attr_t,
+            dnnl_engine_t,
+        ),
+        sum_primitive_desc,
+        dst_desc,
+        n,
+        scales,
+        src_descs,
+        attr,
+        engine,
+    )
 end
 
 function dnnl_binary_desc_init(binary_desc, alg_kind, src0_desc, src1_desc, dst_desc)
-    ccall((:dnnl_binary_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_binary_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), binary_desc, alg_kind, src0_desc, src1_desc, dst_desc)
+    return ccall(
+        (:dnnl_binary_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_binary_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        binary_desc,
+        alg_kind,
+        src0_desc,
+        src1_desc,
+        dst_desc,
+    )
 end
 
-function dnnl_convolution_forward_desc_init(conv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_convolution_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, padding_l, padding_r)
+function dnnl_convolution_forward_desc_init(
+    conv_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    weights_desc,
+    bias_desc,
+    dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_convolution_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_convolution_forward_desc_init(conv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_convolution_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_convolution_forward_desc_init(
+    conv_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    weights_desc,
+    bias_desc,
+    dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_convolution_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_convolution_backward_data_desc_init(conv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_convolution_backward_data_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, padding_l, padding_r)
+function dnnl_convolution_backward_data_desc_init(
+    conv_desc,
+    alg_kind,
+    diff_src_desc,
+    weights_desc,
+    diff_dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_convolution_backward_data_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        alg_kind,
+        diff_src_desc,
+        weights_desc,
+        diff_dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_convolution_backward_data_desc_init(conv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_convolution_backward_data_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_convolution_backward_data_desc_init(
+    conv_desc,
+    alg_kind,
+    diff_src_desc,
+    weights_desc,
+    diff_dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_convolution_backward_data_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        alg_kind,
+        diff_src_desc,
+        weights_desc,
+        diff_dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_convolution_backward_weights_desc_init(conv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_convolution_backward_weights_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, padding_l, padding_r)
+function dnnl_convolution_backward_weights_desc_init(
+    conv_desc,
+    alg_kind,
+    src_desc,
+    diff_weights_desc,
+    diff_bias_desc,
+    diff_dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_convolution_backward_weights_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        alg_kind,
+        src_desc,
+        diff_weights_desc,
+        diff_bias_desc,
+        diff_dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_convolution_backward_weights_desc_init(conv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_convolution_backward_weights_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_convolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), conv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_convolution_backward_weights_desc_init(
+    conv_desc,
+    alg_kind,
+    src_desc,
+    diff_weights_desc,
+    diff_bias_desc,
+    diff_dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_convolution_backward_weights_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_convolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        conv_desc,
+        alg_kind,
+        src_desc,
+        diff_weights_desc,
+        diff_bias_desc,
+        diff_dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_deconvolution_forward_desc_init(deconv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_deconvolution_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, padding_l, padding_r)
+function dnnl_deconvolution_forward_desc_init(
+    deconv_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    weights_desc,
+    bias_desc,
+    dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_deconvolution_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_deconvolution_forward_desc_init(deconv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_deconvolution_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, prop_kind, alg_kind, src_desc, weights_desc, bias_desc, dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_deconvolution_forward_desc_init(
+    deconv_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    weights_desc,
+    bias_desc,
+    dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_deconvolution_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_deconvolution_backward_data_desc_init(deconv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_deconvolution_backward_data_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, padding_l, padding_r)
+function dnnl_deconvolution_backward_data_desc_init(
+    deconv_desc,
+    alg_kind,
+    diff_src_desc,
+    weights_desc,
+    diff_dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_deconvolution_backward_data_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        alg_kind,
+        diff_src_desc,
+        weights_desc,
+        diff_dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_deconvolution_backward_data_desc_init(deconv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_deconvolution_backward_data_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, alg_kind, diff_src_desc, weights_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_deconvolution_backward_data_desc_init(
+    deconv_desc,
+    alg_kind,
+    diff_src_desc,
+    weights_desc,
+    diff_dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_deconvolution_backward_data_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        alg_kind,
+        diff_src_desc,
+        weights_desc,
+        diff_dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_deconvolution_backward_weights_desc_init(deconv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, padding_l, padding_r)
-    ccall((:dnnl_deconvolution_backward_weights_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, padding_l, padding_r)
+function dnnl_deconvolution_backward_weights_desc_init(
+    deconv_desc,
+    alg_kind,
+    src_desc,
+    diff_weights_desc,
+    diff_bias_desc,
+    diff_dst_desc,
+    strides,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_deconvolution_backward_weights_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        alg_kind,
+        src_desc,
+        diff_weights_desc,
+        diff_bias_desc,
+        diff_dst_desc,
+        strides,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_dilated_deconvolution_backward_weights_desc_init(deconv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
-    ccall((:dnnl_dilated_deconvolution_backward_weights_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_deconvolution_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), deconv_desc, alg_kind, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc, strides, dilates, padding_l, padding_r)
+function dnnl_dilated_deconvolution_backward_weights_desc_init(
+    deconv_desc,
+    alg_kind,
+    src_desc,
+    diff_weights_desc,
+    diff_bias_desc,
+    diff_dst_desc,
+    strides,
+    dilates,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_dilated_deconvolution_backward_weights_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_deconvolution_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        deconv_desc,
+        alg_kind,
+        src_desc,
+        diff_weights_desc,
+        diff_bias_desc,
+        diff_dst_desc,
+        strides,
+        dilates,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_shuffle_forward_desc_init(shuffle_desc, prop_kind, data_desc, axis, group_size)
-    ccall((:dnnl_shuffle_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_shuffle_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cint, dnnl_dim_t), shuffle_desc, prop_kind, data_desc, axis, group_size)
+function dnnl_shuffle_forward_desc_init(
+    shuffle_desc, prop_kind, data_desc, axis, group_size
+)
+    return ccall(
+        (:dnnl_shuffle_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_shuffle_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Cint,
+            dnnl_dim_t,
+        ),
+        shuffle_desc,
+        prop_kind,
+        data_desc,
+        axis,
+        group_size,
+    )
 end
 
 function dnnl_shuffle_backward_desc_init(shuffle_desc, diff_data_desc, axis, group_size)
-    ccall((:dnnl_shuffle_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_shuffle_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, dnnl_dim_t), shuffle_desc, diff_data_desc, axis, group_size)
+    return ccall(
+        (:dnnl_shuffle_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_shuffle_desc_t}, Ptr{dnnl_memory_desc_t}, Cint, dnnl_dim_t),
+        shuffle_desc,
+        diff_data_desc,
+        axis,
+        group_size,
+    )
 end
 
-function dnnl_eltwise_forward_desc_init(eltwise_desc, prop_kind, alg_kind, data_desc, alpha, beta)
-    ccall((:dnnl_eltwise_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_eltwise_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Cfloat, Cfloat), eltwise_desc, prop_kind, alg_kind, data_desc, alpha, beta)
+function dnnl_eltwise_forward_desc_init(
+    eltwise_desc, prop_kind, alg_kind, data_desc, alpha, beta
+)
+    return ccall(
+        (:dnnl_eltwise_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_eltwise_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cfloat,
+        ),
+        eltwise_desc,
+        prop_kind,
+        alg_kind,
+        data_desc,
+        alpha,
+        beta,
+    )
 end
 
-function dnnl_eltwise_backward_desc_init(eltwise_desc, alg_kind, diff_data_desc, data_desc, alpha, beta)
-    ccall((:dnnl_eltwise_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_eltwise_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cfloat, Cfloat), eltwise_desc, alg_kind, diff_data_desc, data_desc, alpha, beta)
+function dnnl_eltwise_backward_desc_init(
+    eltwise_desc, alg_kind, diff_data_desc, data_desc, alpha, beta
+)
+    return ccall(
+        (:dnnl_eltwise_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_eltwise_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cfloat,
+        ),
+        eltwise_desc,
+        alg_kind,
+        diff_data_desc,
+        data_desc,
+        alpha,
+        beta,
+    )
 end
 
 function dnnl_softmax_forward_desc_init(softmax_desc, prop_kind, data_desc, softmax_axis)
-    ccall((:dnnl_softmax_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_softmax_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cint), softmax_desc, prop_kind, data_desc, softmax_axis)
+    return ccall(
+        (:dnnl_softmax_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_softmax_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cint),
+        softmax_desc,
+        prop_kind,
+        data_desc,
+        softmax_axis,
+    )
 end
 
-function dnnl_softmax_backward_desc_init(softmax_desc, diff_data_desc, data_desc, softmax_axis)
-    ccall((:dnnl_softmax_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_softmax_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cint), softmax_desc, diff_data_desc, data_desc, softmax_axis)
+function dnnl_softmax_backward_desc_init(
+    softmax_desc, diff_data_desc, data_desc, softmax_axis
+)
+    return ccall(
+        (:dnnl_softmax_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_softmax_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cint),
+        softmax_desc,
+        diff_data_desc,
+        data_desc,
+        softmax_axis,
+    )
 end
 
-function dnnl_logsoftmax_forward_desc_init(logsoftmax_desc, prop_kind, data_desc, logsoftmax_axis)
-    ccall((:dnnl_logsoftmax_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_logsoftmax_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cint), logsoftmax_desc, prop_kind, data_desc, logsoftmax_axis)
+function dnnl_logsoftmax_forward_desc_init(
+    logsoftmax_desc, prop_kind, data_desc, logsoftmax_axis
+)
+    return ccall(
+        (:dnnl_logsoftmax_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_logsoftmax_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cint),
+        logsoftmax_desc,
+        prop_kind,
+        data_desc,
+        logsoftmax_axis,
+    )
 end
 
-function dnnl_logsoftmax_backward_desc_init(logsoftmax_desc, diff_data_desc, data_desc, logsoftmax_axis)
-    ccall((:dnnl_logsoftmax_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_logsoftmax_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cint), logsoftmax_desc, diff_data_desc, data_desc, logsoftmax_axis)
+function dnnl_logsoftmax_backward_desc_init(
+    logsoftmax_desc, diff_data_desc, data_desc, logsoftmax_axis
+)
+    return ccall(
+        (:dnnl_logsoftmax_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_logsoftmax_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cint,
+        ),
+        logsoftmax_desc,
+        diff_data_desc,
+        data_desc,
+        logsoftmax_axis,
+    )
 end
 
-function dnnl_pooling_forward_desc_init(pool_desc, prop_kind, alg_kind, src_desc, dst_desc, strides, kernel, padding_l, padding_r)
-    ccall((:dnnl_pooling_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_pooling_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), pool_desc, prop_kind, alg_kind, src_desc, dst_desc, strides, kernel, padding_l, padding_r)
+function dnnl_pooling_forward_desc_init(
+    pool_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    dst_desc,
+    strides,
+    kernel,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_pooling_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_pooling_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        pool_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        dst_desc,
+        strides,
+        kernel,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_pooling_backward_desc_init(pool_desc, alg_kind, diff_src_desc, diff_dst_desc, strides, kernel, padding_l, padding_r)
-    ccall((:dnnl_pooling_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_pooling_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), pool_desc, alg_kind, diff_src_desc, diff_dst_desc, strides, kernel, padding_l, padding_r)
+function dnnl_pooling_backward_desc_init(
+    pool_desc, alg_kind, diff_src_desc, diff_dst_desc, strides, kernel, padding_l, padding_r
+)
+    return ccall(
+        (:dnnl_pooling_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_pooling_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        pool_desc,
+        alg_kind,
+        diff_src_desc,
+        diff_dst_desc,
+        strides,
+        kernel,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_pooling_v2_forward_desc_init(pool_desc, prop_kind, alg_kind, src_desc, dst_desc, strides, kernel, dilation, padding_l, padding_r)
-    ccall((:dnnl_pooling_v2_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_pooling_v2_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), pool_desc, prop_kind, alg_kind, src_desc, dst_desc, strides, kernel, dilation, padding_l, padding_r)
+function dnnl_pooling_v2_forward_desc_init(
+    pool_desc,
+    prop_kind,
+    alg_kind,
+    src_desc,
+    dst_desc,
+    strides,
+    kernel,
+    dilation,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_pooling_v2_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_pooling_v2_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        pool_desc,
+        prop_kind,
+        alg_kind,
+        src_desc,
+        dst_desc,
+        strides,
+        kernel,
+        dilation,
+        padding_l,
+        padding_r,
+    )
 end
 
-function dnnl_pooling_v2_backward_desc_init(pool_desc, alg_kind, diff_src_desc, diff_dst_desc, strides, kernel, dilation, padding_l, padding_r)
-    ccall((:dnnl_pooling_v2_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_pooling_v2_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}, Ptr{Clong}), pool_desc, alg_kind, diff_src_desc, diff_dst_desc, strides, kernel, dilation, padding_l, padding_r)
+function dnnl_pooling_v2_backward_desc_init(
+    pool_desc,
+    alg_kind,
+    diff_src_desc,
+    diff_dst_desc,
+    strides,
+    kernel,
+    dilation,
+    padding_l,
+    padding_r,
+)
+    return ccall(
+        (:dnnl_pooling_v2_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_pooling_v2_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+            Ptr{Clong},
+        ),
+        pool_desc,
+        alg_kind,
+        diff_src_desc,
+        diff_dst_desc,
+        strides,
+        kernel,
+        dilation,
+        padding_l,
+        padding_r,
+    )
 end
 
 function dnnl_prelu_forward_desc_init(prelu_desc, prop_kind, data_desc, weights_desc)
-    ccall((:dnnl_prelu_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_prelu_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), prelu_desc, prop_kind, data_desc, weights_desc)
+    return ccall(
+        (:dnnl_prelu_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_prelu_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        prelu_desc,
+        prop_kind,
+        data_desc,
+        weights_desc,
+    )
 end
 
-function dnnl_prelu_backward_desc_init(prelu_desc, data_desc, weights_desc, diff_data_desc, diff_weights_desc)
-    ccall((:dnnl_prelu_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_prelu_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), prelu_desc, data_desc, weights_desc, diff_data_desc, diff_weights_desc)
+function dnnl_prelu_backward_desc_init(
+    prelu_desc, data_desc, weights_desc, diff_data_desc, diff_weights_desc
+)
+    return ccall(
+        (:dnnl_prelu_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_prelu_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        prelu_desc,
+        data_desc,
+        weights_desc,
+        diff_data_desc,
+        diff_weights_desc,
+    )
 end
 
-function dnnl_lrn_forward_desc_init(lrn_desc, prop_kind, alg_kind, data_desc, local_size, alpha, beta, k)
-    ccall((:dnnl_lrn_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_lrn_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, dnnl_dim_t, Cfloat, Cfloat, Cfloat), lrn_desc, prop_kind, alg_kind, data_desc, local_size, alpha, beta, k)
+function dnnl_lrn_forward_desc_init(
+    lrn_desc, prop_kind, alg_kind, data_desc, local_size, alpha, beta, k
+)
+    return ccall(
+        (:dnnl_lrn_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_lrn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            dnnl_dim_t,
+            Cfloat,
+            Cfloat,
+            Cfloat,
+        ),
+        lrn_desc,
+        prop_kind,
+        alg_kind,
+        data_desc,
+        local_size,
+        alpha,
+        beta,
+        k,
+    )
 end
 
-function dnnl_lrn_backward_desc_init(lrn_desc, alg_kind, diff_data_desc, data_desc, local_size, alpha, beta, k)
-    ccall((:dnnl_lrn_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_lrn_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, dnnl_dim_t, Cfloat, Cfloat, Cfloat), lrn_desc, alg_kind, diff_data_desc, data_desc, local_size, alpha, beta, k)
+function dnnl_lrn_backward_desc_init(
+    lrn_desc, alg_kind, diff_data_desc, data_desc, local_size, alpha, beta, k
+)
+    return ccall(
+        (:dnnl_lrn_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_lrn_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            dnnl_dim_t,
+            Cfloat,
+            Cfloat,
+            Cfloat,
+        ),
+        lrn_desc,
+        alg_kind,
+        diff_data_desc,
+        data_desc,
+        local_size,
+        alpha,
+        beta,
+        k,
+    )
 end
 
-function dnnl_batch_normalization_forward_desc_init(bnrm_desc, prop_kind, data_desc, epsilon, flags)
-    ccall((:dnnl_batch_normalization_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_batch_normalization_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Cfloat, Cuint), bnrm_desc, prop_kind, data_desc, epsilon, flags)
+function dnnl_batch_normalization_forward_desc_init(
+    bnrm_desc, prop_kind, data_desc, epsilon, flags
+)
+    return ccall(
+        (:dnnl_batch_normalization_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_batch_normalization_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cuint,
+        ),
+        bnrm_desc,
+        prop_kind,
+        data_desc,
+        epsilon,
+        flags,
+    )
 end
 
-function dnnl_batch_normalization_backward_desc_init(bnrm_desc, prop_kind, diff_data_desc, data_desc, epsilon, flags)
-    ccall((:dnnl_batch_normalization_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_batch_normalization_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cfloat, Cuint), bnrm_desc, prop_kind, diff_data_desc, data_desc, epsilon, flags)
+function dnnl_batch_normalization_backward_desc_init(
+    bnrm_desc, prop_kind, diff_data_desc, data_desc, epsilon, flags
+)
+    return ccall(
+        (:dnnl_batch_normalization_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_batch_normalization_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cuint,
+        ),
+        bnrm_desc,
+        prop_kind,
+        diff_data_desc,
+        data_desc,
+        epsilon,
+        flags,
+    )
 end
 
-function dnnl_layer_normalization_forward_desc_init(lnrm_desc, prop_kind, data_desc, stat_desc, epsilon, flags)
-    ccall((:dnnl_layer_normalization_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_layer_normalization_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cfloat, Cuint), lnrm_desc, prop_kind, data_desc, stat_desc, epsilon, flags)
+function dnnl_layer_normalization_forward_desc_init(
+    lnrm_desc, prop_kind, data_desc, stat_desc, epsilon, flags
+)
+    return ccall(
+        (:dnnl_layer_normalization_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_layer_normalization_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cuint,
+        ),
+        lnrm_desc,
+        prop_kind,
+        data_desc,
+        stat_desc,
+        epsilon,
+        flags,
+    )
 end
 
-function dnnl_layer_normalization_backward_desc_init(lnrm_desc, prop_kind, diff_data_desc, data_desc, stat_desc, epsilon, flags)
-    ccall((:dnnl_layer_normalization_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_layer_normalization_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cfloat, Cuint), lnrm_desc, prop_kind, diff_data_desc, data_desc, stat_desc, epsilon, flags)
+function dnnl_layer_normalization_backward_desc_init(
+    lnrm_desc, prop_kind, diff_data_desc, data_desc, stat_desc, epsilon, flags
+)
+    return ccall(
+        (:dnnl_layer_normalization_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_layer_normalization_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cuint,
+        ),
+        lnrm_desc,
+        prop_kind,
+        diff_data_desc,
+        data_desc,
+        stat_desc,
+        epsilon,
+        flags,
+    )
 end
 
-function dnnl_inner_product_forward_desc_init(ip_desc, prop_kind, src_desc, weights_desc, bias_desc, dst_desc)
-    ccall((:dnnl_inner_product_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_inner_product_desc_t}, dnnl_prop_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), ip_desc, prop_kind, src_desc, weights_desc, bias_desc, dst_desc)
+function dnnl_inner_product_forward_desc_init(
+    ip_desc, prop_kind, src_desc, weights_desc, bias_desc, dst_desc
+)
+    return ccall(
+        (:dnnl_inner_product_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_inner_product_desc_t},
+            dnnl_prop_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        ip_desc,
+        prop_kind,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+    )
 end
 
-function dnnl_inner_product_backward_data_desc_init(ip_desc, diff_src_desc, weights_desc, diff_dst_desc)
-    ccall((:dnnl_inner_product_backward_data_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_inner_product_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), ip_desc, diff_src_desc, weights_desc, diff_dst_desc)
+function dnnl_inner_product_backward_data_desc_init(
+    ip_desc, diff_src_desc, weights_desc, diff_dst_desc
+)
+    return ccall(
+        (:dnnl_inner_product_backward_data_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_inner_product_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        ip_desc,
+        diff_src_desc,
+        weights_desc,
+        diff_dst_desc,
+    )
 end
 
-function dnnl_inner_product_backward_weights_desc_init(ip_desc, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc)
-    ccall((:dnnl_inner_product_backward_weights_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_inner_product_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), ip_desc, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc)
+function dnnl_inner_product_backward_weights_desc_init(
+    ip_desc, src_desc, diff_weights_desc, diff_bias_desc, diff_dst_desc
+)
+    return ccall(
+        (:dnnl_inner_product_backward_weights_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_inner_product_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        ip_desc,
+        src_desc,
+        diff_weights_desc,
+        diff_bias_desc,
+        diff_dst_desc,
+    )
 end
 
 function dnnl_primitive_attr_set_rnn_data_qparams(attr, scale, shift)
-    ccall((:dnnl_primitive_attr_set_rnn_data_qparams, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, Cfloat, Cfloat), attr, scale, shift)
+    return ccall(
+        (:dnnl_primitive_attr_set_rnn_data_qparams, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, Cfloat, Cfloat),
+        attr,
+        scale,
+        shift,
+    )
 end
 
 function dnnl_primitive_attr_get_rnn_data_qparams(attr, scale, shift)
-    ccall((:dnnl_primitive_attr_get_rnn_data_qparams, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{Cfloat}, Ptr{Cfloat}), attr, scale, shift)
+    return ccall(
+        (:dnnl_primitive_attr_get_rnn_data_qparams, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{Cfloat}, Ptr{Cfloat}),
+        attr,
+        scale,
+        shift,
+    )
 end
 
 function dnnl_primitive_attr_set_rnn_weights_qparams(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_set_rnn_weights_qparams, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_set_rnn_weights_qparams, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_get_rnn_weights_qparams(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_get_rnn_weights_qparams, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_get_rnn_weights_qparams, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_set_rnn_weights_projection_qparams(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_set_rnn_weights_projection_qparams, libdnnl), dnnl_status_t, (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_set_rnn_weights_projection_qparams, libdnnl),
+        dnnl_status_t,
+        (dnnl_primitive_attr_t, dnnl_dim_t, Cint, Ptr{Cfloat}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
 function dnnl_primitive_attr_get_rnn_weights_projection_qparams(attr, count, mask, scales)
-    ccall((:dnnl_primitive_attr_get_rnn_weights_projection_qparams, libdnnl), dnnl_status_t, (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}), attr, count, mask, scales)
+    return ccall(
+        (:dnnl_primitive_attr_get_rnn_weights_projection_qparams, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_primitive_attr_t, Ptr{dnnl_dim_t}, Ptr{Cint}, Ptr{Ptr{Cfloat}}),
+        attr,
+        count,
+        mask,
+        scales,
+    )
 end
 
-function dnnl_vanilla_rnn_forward_desc_init(rnn_desc, prop_kind, activation, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags, alpha, beta)
-    ccall((:dnnl_vanilla_rnn_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint, Cfloat, Cfloat), rnn_desc, prop_kind, activation, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags, alpha, beta)
+function dnnl_vanilla_rnn_forward_desc_init(
+    rnn_desc,
+    prop_kind,
+    activation,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    flags,
+    alpha,
+    beta,
+)
+    return ccall(
+        (:dnnl_vanilla_rnn_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+            Cfloat,
+            Cfloat,
+        ),
+        rnn_desc,
+        prop_kind,
+        activation,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        flags,
+        alpha,
+        beta,
+    )
 end
 
-function dnnl_vanilla_rnn_backward_desc_init(rnn_desc, prop_kind, activation, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags, alpha, beta)
-    ccall((:dnnl_vanilla_rnn_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint, Cfloat, Cfloat), rnn_desc, prop_kind, activation, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags, alpha, beta)
+function dnnl_vanilla_rnn_backward_desc_init(
+    rnn_desc,
+    prop_kind,
+    activation,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    flags,
+    alpha,
+    beta,
+)
+    return ccall(
+        (:dnnl_vanilla_rnn_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+            Cfloat,
+            Cfloat,
+        ),
+        rnn_desc,
+        prop_kind,
+        activation,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        flags,
+        alpha,
+        beta,
+    )
 end
 
-function dnnl_lstm_forward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
+function dnnl_lstm_forward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_lstm_forward_desc_init_v2(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_forward_desc_init_v2, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
+function dnnl_lstm_forward_desc_init_v2(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    weights_peephole_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_forward_desc_init_v2, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        weights_peephole_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_lstm_forward_desc_init_v3(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, weights_projection_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_forward_desc_init_v3, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, weights_projection_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, flags)
+function dnnl_lstm_forward_desc_init_v3(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    weights_peephole_desc,
+    weights_projection_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_forward_desc_init_v3, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        weights_peephole_desc,
+        weights_projection_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_lstm_backward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
+function dnnl_lstm_backward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_src_iter_c_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    diff_dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_src_iter_c_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        diff_dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_lstm_backward_desc_init_v2(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_weights_peephole_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_backward_desc_init_v2, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_weights_peephole_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
+function dnnl_lstm_backward_desc_init_v2(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    weights_peephole_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_src_iter_c_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_weights_peephole_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    diff_dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_backward_desc_init_v2, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        weights_peephole_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_src_iter_c_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_weights_peephole_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        diff_dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_lstm_backward_desc_init_v3(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, weights_projection_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_weights_peephole_desc, diff_weights_projection_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
-    ccall((:dnnl_lstm_backward_desc_init_v3, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, src_iter_c_desc, weights_layer_desc, weights_iter_desc, weights_peephole_desc, weights_projection_desc, bias_desc, dst_layer_desc, dst_iter_desc, dst_iter_c_desc, diff_src_layer_desc, diff_src_iter_desc, diff_src_iter_c_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_weights_peephole_desc, diff_weights_projection_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, diff_dst_iter_c_desc, flags)
+function dnnl_lstm_backward_desc_init_v3(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    src_iter_c_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    weights_peephole_desc,
+    weights_projection_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    dst_iter_c_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_src_iter_c_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_weights_peephole_desc,
+    diff_weights_projection_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    diff_dst_iter_c_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lstm_backward_desc_init_v3, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        src_iter_c_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        weights_peephole_desc,
+        weights_projection_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        dst_iter_c_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_src_iter_c_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_weights_peephole_desc,
+        diff_weights_projection_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        diff_dst_iter_c_desc,
+        flags,
+    )
 end
 
-function dnnl_gru_forward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags)
-    ccall((:dnnl_gru_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags)
+function dnnl_gru_forward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_gru_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        flags,
+    )
 end
 
-function dnnl_gru_backward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags)
-    ccall((:dnnl_gru_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags)
+function dnnl_gru_backward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_gru_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        flags,
+    )
 end
 
-function dnnl_lbr_gru_forward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags)
-    ccall((:dnnl_lbr_gru_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, flags)
+function dnnl_lbr_gru_forward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lbr_gru_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        flags,
+    )
 end
 
-function dnnl_lbr_gru_backward_desc_init(rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags)
-    ccall((:dnnl_lbr_gru_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_rnn_desc_t}, dnnl_prop_kind_t, dnnl_rnn_direction_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cuint), rnn_desc, prop_kind, direction, src_layer_desc, src_iter_desc, weights_layer_desc, weights_iter_desc, bias_desc, dst_layer_desc, dst_iter_desc, diff_src_layer_desc, diff_src_iter_desc, diff_weights_layer_desc, diff_weights_iter_desc, diff_bias_desc, diff_dst_layer_desc, diff_dst_iter_desc, flags)
+function dnnl_lbr_gru_backward_desc_init(
+    rnn_desc,
+    prop_kind,
+    direction,
+    src_layer_desc,
+    src_iter_desc,
+    weights_layer_desc,
+    weights_iter_desc,
+    bias_desc,
+    dst_layer_desc,
+    dst_iter_desc,
+    diff_src_layer_desc,
+    diff_src_iter_desc,
+    diff_weights_layer_desc,
+    diff_weights_iter_desc,
+    diff_bias_desc,
+    diff_dst_layer_desc,
+    diff_dst_iter_desc,
+    flags,
+)
+    return ccall(
+        (:dnnl_lbr_gru_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_rnn_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_rnn_direction_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cuint,
+        ),
+        rnn_desc,
+        prop_kind,
+        direction,
+        src_layer_desc,
+        src_iter_desc,
+        weights_layer_desc,
+        weights_iter_desc,
+        bias_desc,
+        dst_layer_desc,
+        dst_iter_desc,
+        diff_src_layer_desc,
+        diff_src_iter_desc,
+        diff_weights_layer_desc,
+        diff_weights_iter_desc,
+        diff_bias_desc,
+        diff_dst_layer_desc,
+        diff_dst_iter_desc,
+        flags,
+    )
 end
 
 function dnnl_matmul_desc_init(matmul_desc, src_desc, weights_desc, bias_desc, dst_desc)
-    ccall((:dnnl_matmul_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_matmul_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), matmul_desc, src_desc, weights_desc, bias_desc, dst_desc)
+    return ccall(
+        (:dnnl_matmul_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_matmul_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        matmul_desc,
+        src_desc,
+        weights_desc,
+        bias_desc,
+        dst_desc,
+    )
 end
 
-function dnnl_resampling_forward_desc_init(resampling_desc, prop_kind, alg_kind, factors, src_desc, dst_desc)
-    ccall((:dnnl_resampling_forward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_resampling_desc_t}, dnnl_prop_kind_t, dnnl_alg_kind_t, Ptr{Cfloat}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), resampling_desc, prop_kind, alg_kind, factors, src_desc, dst_desc)
+function dnnl_resampling_forward_desc_init(
+    resampling_desc, prop_kind, alg_kind, factors, src_desc, dst_desc
+)
+    return ccall(
+        (:dnnl_resampling_forward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_resampling_desc_t},
+            dnnl_prop_kind_t,
+            dnnl_alg_kind_t,
+            Ptr{Cfloat},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        resampling_desc,
+        prop_kind,
+        alg_kind,
+        factors,
+        src_desc,
+        dst_desc,
+    )
 end
 
-function dnnl_resampling_backward_desc_init(resampling_desc, alg_kind, factors, diff_src_desc, diff_dst_desc)
-    ccall((:dnnl_resampling_backward_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_resampling_desc_t}, dnnl_alg_kind_t, Ptr{Cfloat}, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}), resampling_desc, alg_kind, factors, diff_src_desc, diff_dst_desc)
+function dnnl_resampling_backward_desc_init(
+    resampling_desc, alg_kind, factors, diff_src_desc, diff_dst_desc
+)
+    return ccall(
+        (:dnnl_resampling_backward_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_resampling_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{Cfloat},
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+        ),
+        resampling_desc,
+        alg_kind,
+        factors,
+        diff_src_desc,
+        diff_dst_desc,
+    )
 end
 
 function dnnl_reduction_desc_init(desc, alg_kind, src_desc, dst_desc, p, eps)
-    ccall((:dnnl_reduction_desc_init, libdnnl), dnnl_status_t, (Ptr{dnnl_reduction_desc_t}, dnnl_alg_kind_t, Ptr{dnnl_memory_desc_t}, Ptr{dnnl_memory_desc_t}, Cfloat, Cfloat), desc, alg_kind, src_desc, dst_desc, p, eps)
+    return ccall(
+        (:dnnl_reduction_desc_init, libdnnl),
+        dnnl_status_t,
+        (
+            Ptr{dnnl_reduction_desc_t},
+            dnnl_alg_kind_t,
+            Ptr{dnnl_memory_desc_t},
+            Ptr{dnnl_memory_desc_t},
+            Cfloat,
+            Cfloat,
+        ),
+        desc,
+        alg_kind,
+        src_desc,
+        dst_desc,
+        p,
+        eps,
+    )
 end
 
 function dnnl_engine_get_count(kind)
-    ccall((:dnnl_engine_get_count, libdnnl), Csize_t, (dnnl_engine_kind_t,), kind)
+    return ccall((:dnnl_engine_get_count, libdnnl), Csize_t, (dnnl_engine_kind_t,), kind)
 end
 
 function dnnl_engine_create(engine, kind, index)
-    ccall((:dnnl_engine_create, libdnnl), dnnl_status_t, (Ptr{dnnl_engine_t}, dnnl_engine_kind_t, Csize_t), engine, kind, index)
+    return ccall(
+        (:dnnl_engine_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_engine_t}, dnnl_engine_kind_t, Csize_t),
+        engine,
+        kind,
+        index,
+    )
 end
 
 function dnnl_engine_get_kind(engine, kind)
-    ccall((:dnnl_engine_get_kind, libdnnl), dnnl_status_t, (dnnl_engine_t, Ptr{dnnl_engine_kind_t}), engine, kind)
+    return ccall(
+        (:dnnl_engine_get_kind, libdnnl),
+        dnnl_status_t,
+        (dnnl_engine_t, Ptr{dnnl_engine_kind_t}),
+        engine,
+        kind,
+    )
 end
 
 function dnnl_engine_destroy(engine)
-    ccall((:dnnl_engine_destroy, libdnnl), dnnl_status_t, (dnnl_engine_t,), engine)
+    return ccall((:dnnl_engine_destroy, libdnnl), dnnl_status_t, (dnnl_engine_t,), engine)
 end
 
 function dnnl_stream_create(stream, engine, flags)
-    ccall((:dnnl_stream_create, libdnnl), dnnl_status_t, (Ptr{dnnl_stream_t}, dnnl_engine_t, Cuint), stream, engine, flags)
+    return ccall(
+        (:dnnl_stream_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_stream_t}, dnnl_engine_t, Cuint),
+        stream,
+        engine,
+        flags,
+    )
 end
 
 function dnnl_stream_get_engine(stream, engine)
-    ccall((:dnnl_stream_get_engine, libdnnl), dnnl_status_t, (const_dnnl_stream_t, Ptr{dnnl_engine_t}), stream, engine)
+    return ccall(
+        (:dnnl_stream_get_engine, libdnnl),
+        dnnl_status_t,
+        (const_dnnl_stream_t, Ptr{dnnl_engine_t}),
+        stream,
+        engine,
+    )
 end
 
 function dnnl_stream_wait(stream)
-    ccall((:dnnl_stream_wait, libdnnl), dnnl_status_t, (dnnl_stream_t,), stream)
+    return ccall((:dnnl_stream_wait, libdnnl), dnnl_status_t, (dnnl_stream_t,), stream)
 end
 
 function dnnl_stream_destroy(stream)
-    ccall((:dnnl_stream_destroy, libdnnl), dnnl_status_t, (dnnl_stream_t,), stream)
+    return ccall((:dnnl_stream_destroy, libdnnl), dnnl_status_t, (dnnl_stream_t,), stream)
 end
 
 function dnnl_get_primitive_cache_capacity(capacity)
-    ccall((:dnnl_get_primitive_cache_capacity, libdnnl), dnnl_status_t, (Ptr{Cint},), capacity)
+    return ccall(
+        (:dnnl_get_primitive_cache_capacity, libdnnl), dnnl_status_t, (Ptr{Cint},), capacity
+    )
 end
 
 function dnnl_set_primitive_cache_capacity(capacity)
-    ccall((:dnnl_set_primitive_cache_capacity, libdnnl), dnnl_status_t, (Cint,), capacity)
+    return ccall(
+        (:dnnl_set_primitive_cache_capacity, libdnnl), dnnl_status_t, (Cint,), capacity
+    )
 end
 
 function dnnl_set_verbose(level)
-    ccall((:dnnl_set_verbose, libdnnl), dnnl_status_t, (Cint,), level)
+    return ccall((:dnnl_set_verbose, libdnnl), dnnl_status_t, (Cint,), level)
 end
 
 function dnnl_set_jit_dump(enable)
-    ccall((:dnnl_set_jit_dump, libdnnl), dnnl_status_t, (Cint,), enable)
+    return ccall((:dnnl_set_jit_dump, libdnnl), dnnl_status_t, (Cint,), enable)
 end
 
 function dnnl_version()
-    ccall((:dnnl_version, libdnnl), Ptr{dnnl_version_t}, ())
+    return ccall((:dnnl_version, libdnnl), Ptr{dnnl_version_t}, ())
 end
 
 function dnnl_set_jit_profiling_flags(flags)
-    ccall((:dnnl_set_jit_profiling_flags, libdnnl), dnnl_status_t, (Cuint,), flags)
+    return ccall((:dnnl_set_jit_profiling_flags, libdnnl), dnnl_status_t, (Cuint,), flags)
 end
 
 function dnnl_set_jit_profiling_jitdumpdir(dir)
-    ccall((:dnnl_set_jit_profiling_jitdumpdir, libdnnl), dnnl_status_t, (Ptr{Cchar},), dir)
+    return ccall(
+        (:dnnl_set_jit_profiling_jitdumpdir, libdnnl), dnnl_status_t, (Ptr{Cchar},), dir
+    )
 end
 
 function dnnl_set_max_cpu_isa(isa)
-    ccall((:dnnl_set_max_cpu_isa, libdnnl), dnnl_status_t, (dnnl_cpu_isa_t,), isa)
+    return ccall((:dnnl_set_max_cpu_isa, libdnnl), dnnl_status_t, (dnnl_cpu_isa_t,), isa)
 end
 
 function dnnl_get_effective_cpu_isa()
-    ccall((:dnnl_get_effective_cpu_isa, libdnnl), dnnl_cpu_isa_t, ())
+    return ccall((:dnnl_get_effective_cpu_isa, libdnnl), dnnl_cpu_isa_t, ())
 end
 
 function dnnl_set_cpu_isa_hints(isa_hints)
-    ccall((:dnnl_set_cpu_isa_hints, libdnnl), dnnl_status_t, (dnnl_cpu_isa_hints_t,), isa_hints)
+    return ccall(
+        (:dnnl_set_cpu_isa_hints, libdnnl),
+        dnnl_status_t,
+        (dnnl_cpu_isa_hints_t,),
+        isa_hints,
+    )
 end
 
 function dnnl_get_cpu_isa_hints()
-    ccall((:dnnl_get_cpu_isa_hints, libdnnl), dnnl_cpu_isa_hints_t, ())
+    return ccall((:dnnl_get_cpu_isa_hints, libdnnl), dnnl_cpu_isa_hints_t, ())
 end
 
 function dnnl_sgemm(transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc)
-    ccall((:dnnl_sgemm, libdnnl), dnnl_status_t, (Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{Cfloat}, dnnl_dim_t, Ptr{Cfloat}, dnnl_dim_t, Cfloat, Ptr{Cfloat}, dnnl_dim_t), transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc)
+    return ccall(
+        (:dnnl_sgemm, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+        ),
+        transa,
+        transb,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        B,
+        ldb,
+        beta,
+        C,
+        ldc,
+    )
 end
 
-function dnnl_gemm_u8s8s32(transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co)
-    ccall((:dnnl_gemm_u8s8s32, libdnnl), dnnl_status_t, (Cchar, Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{UInt8}, dnnl_dim_t, UInt8, Ptr{Int8}, dnnl_dim_t, Int8, Cfloat, Ptr{Int32}, dnnl_dim_t, Ptr{Int32}), transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co)
+function dnnl_gemm_u8s8s32(
+    transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co
+)
+    return ccall(
+        (:dnnl_gemm_u8s8s32, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{UInt8},
+            dnnl_dim_t,
+            UInt8,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Cfloat,
+            Ptr{Int32},
+            dnnl_dim_t,
+            Ptr{Int32},
+        ),
+        transa,
+        transb,
+        offsetc,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        ao,
+        B,
+        ldb,
+        bo,
+        beta,
+        C,
+        ldc,
+        co,
+    )
 end
 
-function dnnl_gemm_s8s8s32(transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co)
-    ccall((:dnnl_gemm_s8s8s32, libdnnl), dnnl_status_t, (Cchar, Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{Int8}, dnnl_dim_t, Int8, Ptr{Int8}, dnnl_dim_t, Int8, Cfloat, Ptr{Int32}, dnnl_dim_t, Ptr{Int32}), transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co)
+function dnnl_gemm_s8s8s32(
+    transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co
+)
+    return ccall(
+        (:dnnl_gemm_s8s8s32, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Cfloat,
+            Ptr{Int32},
+            dnnl_dim_t,
+            Ptr{Int32},
+        ),
+        transa,
+        transb,
+        offsetc,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        ao,
+        B,
+        ldb,
+        bo,
+        beta,
+        C,
+        ldc,
+        co,
+    )
 end
 
 function dnnl_threadpool_interop_stream_create(stream, engine, threadpool)
-    ccall((:dnnl_threadpool_interop_stream_create, libdnnl), dnnl_status_t, (Ptr{dnnl_stream_t}, dnnl_engine_t, Ptr{Cvoid}), stream, engine, threadpool)
+    return ccall(
+        (:dnnl_threadpool_interop_stream_create, libdnnl),
+        dnnl_status_t,
+        (Ptr{dnnl_stream_t}, dnnl_engine_t, Ptr{Cvoid}),
+        stream,
+        engine,
+        threadpool,
+    )
 end
 
 function dnnl_threadpool_interop_stream_get_threadpool(astream, threadpool)
-    ccall((:dnnl_threadpool_interop_stream_get_threadpool, libdnnl), dnnl_status_t, (dnnl_stream_t, Ptr{Ptr{Cvoid}}), astream, threadpool)
+    return ccall(
+        (:dnnl_threadpool_interop_stream_get_threadpool, libdnnl),
+        dnnl_status_t,
+        (dnnl_stream_t, Ptr{Ptr{Cvoid}}),
+        astream,
+        threadpool,
+    )
 end
 
-function dnnl_threadpool_interop_sgemm(transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc, threadpool)
-    ccall((:dnnl_threadpool_interop_sgemm, libdnnl), dnnl_status_t, (Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{Cfloat}, dnnl_dim_t, Ptr{Cfloat}, dnnl_dim_t, Cfloat, Ptr{Cfloat}, dnnl_dim_t, Ptr{Cvoid}), transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc, threadpool)
+function dnnl_threadpool_interop_sgemm(
+    transa, transb, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc, threadpool
+)
+    return ccall(
+        (:dnnl_threadpool_interop_sgemm, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Cfloat},
+            dnnl_dim_t,
+            Ptr{Cvoid},
+        ),
+        transa,
+        transb,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        B,
+        ldb,
+        beta,
+        C,
+        ldc,
+        threadpool,
+    )
 end
 
-function dnnl_threadpool_interop_gemm_u8s8s32(transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co, threadpool)
-    ccall((:dnnl_threadpool_interop_gemm_u8s8s32, libdnnl), dnnl_status_t, (Cchar, Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{UInt8}, dnnl_dim_t, UInt8, Ptr{Int8}, dnnl_dim_t, Int8, Cfloat, Ptr{Int32}, dnnl_dim_t, Ptr{Int32}, Ptr{Cvoid}), transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co, threadpool)
+function dnnl_threadpool_interop_gemm_u8s8s32(
+    transa,
+    transb,
+    offsetc,
+    M,
+    N,
+    K,
+    alpha,
+    A,
+    lda,
+    ao,
+    B,
+    ldb,
+    bo,
+    beta,
+    C,
+    ldc,
+    co,
+    threadpool,
+)
+    return ccall(
+        (:dnnl_threadpool_interop_gemm_u8s8s32, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{UInt8},
+            dnnl_dim_t,
+            UInt8,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Cfloat,
+            Ptr{Int32},
+            dnnl_dim_t,
+            Ptr{Int32},
+            Ptr{Cvoid},
+        ),
+        transa,
+        transb,
+        offsetc,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        ao,
+        B,
+        ldb,
+        bo,
+        beta,
+        C,
+        ldc,
+        co,
+        threadpool,
+    )
 end
 
-function dnnl_threadpool_interop_gemm_s8s8s32(transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co, threadpool)
-    ccall((:dnnl_threadpool_interop_gemm_s8s8s32, libdnnl), dnnl_status_t, (Cchar, Cchar, Cchar, dnnl_dim_t, dnnl_dim_t, dnnl_dim_t, Cfloat, Ptr{Int8}, dnnl_dim_t, Int8, Ptr{Int8}, dnnl_dim_t, Int8, Cfloat, Ptr{Int32}, dnnl_dim_t, Ptr{Int32}, Ptr{Cvoid}), transa, transb, offsetc, M, N, K, alpha, A, lda, ao, B, ldb, bo, beta, C, ldc, co, threadpool)
+function dnnl_threadpool_interop_gemm_s8s8s32(
+    transa,
+    transb,
+    offsetc,
+    M,
+    N,
+    K,
+    alpha,
+    A,
+    lda,
+    ao,
+    B,
+    ldb,
+    bo,
+    beta,
+    C,
+    ldc,
+    co,
+    threadpool,
+)
+    return ccall(
+        (:dnnl_threadpool_interop_gemm_s8s8s32, libdnnl),
+        dnnl_status_t,
+        (
+            Cchar,
+            Cchar,
+            Cchar,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            dnnl_dim_t,
+            Cfloat,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Ptr{Int8},
+            dnnl_dim_t,
+            Int8,
+            Cfloat,
+            Ptr{Int32},
+            dnnl_dim_t,
+            Ptr{Int32},
+            Ptr{Cvoid},
+        ),
+        transa,
+        transb,
+        offsetc,
+        M,
+        N,
+        K,
+        alpha,
+        A,
+        lda,
+        ao,
+        B,
+        ldb,
+        bo,
+        beta,
+        C,
+        ldc,
+        co,
+        threadpool,
+    )
 end
 
 const DNNL_MAX_NDIMS = 12
@@ -2300,7 +4830,8 @@ const DNNL_JIT_PROFILE_LINUX_JITDUMP = Cuint(4)
 
 const DNNL_JIT_PROFILE_LINUX_JITDUMP_USE_TSC = Cuint(8)
 
-const DNNL_JIT_PROFILE_LINUX_PERF = DNNL_JIT_PROFILE_LINUX_JITDUMP | DNNL_JIT_PROFILE_LINUX_PERFMAP
+const DNNL_JIT_PROFILE_LINUX_PERF =
+    DNNL_JIT_PROFILE_LINUX_JITDUMP | DNNL_JIT_PROFILE_LINUX_PERFMAP
 
 # Skipping MacroDefinition: DNNL_HELPER_DLL_IMPORT __attribute__ ( ( visibility ( "default" ) ) )
 
@@ -2321,4 +4852,3 @@ const DNNL_VERSION_MINOR = 3
 const DNNL_VERSION_PATCH = 0
 
 const DNNL_VERSION_HASH = "81a1d98844a2687779c050c2460dc353bd9b15e9"
-

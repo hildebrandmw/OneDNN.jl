@@ -197,3 +197,49 @@ wrap_ref(x) = Ref(x)
 unwrap_ref(x::Ref) = x[]
 unwrap_ref(x) = x
 
+#####
+##### Dimension Helpers
+#####
+
+expand(N, i::Tuple) = i
+expand(N, i::Integer) = ntuple(_ -> i, N)
+
+_paddims(x::Tuple, y::Tuple) = (x..., y[(end - (length(y) - length(x) - 1)):end]...)
+
+struct Dims{N}
+    kernel::NTuple{N,Int}
+    strides::NTuple{N,Int}
+    dilation::NTuple{N,Int}
+    padding::NTuple{N,Int}
+end
+
+function _output_size(dims::Dims, sz::Int, i::Int)
+    @unpack kernel, strides, dilation, padding = dims
+    numerator = sz + 2 * padding[i] - ((kernel[i] - 1) * (dilation[i] + 1) + 1)
+    return div(numerator, strides[i]) + 1
+end
+
+function output_size(sz::NTuple{N,Int}, dims::Dims{M}) where {N,M}
+    return _paddims(ntuple(i -> _output_size(dims, sz[i], i), Val(M)), sz)
+end
+
+#####
+##### Kind Types
+#####
+
+# Move the primitive kind enums into the type domain to give the Julia compiler better
+# type-level information when the return type depends on things like inference vs traiing.
+
+abstract type AbstractKind end
+abstract type AbstractForwardKind <: AbstractKind end
+abstract type AbstractBackwardKind <: AbstractKind end
+
+struct Inference <: AbstractForwardKind end
+struct Training <: AbstractForwardKind end
+struct Backward <: AbstractBackwardKind end
+
+kind(::Inference) = Lib.dnnl_forward_inference
+kind(::Training) = Lib.dnnl_forward_training
+kind(::Backward) = Lib.dnnl_backward
+
+dnnl_convert(x::AbstractKind) = kind(x)

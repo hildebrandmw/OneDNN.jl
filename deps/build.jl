@@ -96,4 +96,3 @@ so = joinpath(@__DIR__, "libthreadpool.so")
 cmd = `$cxx $cxxflags $includes -shared $src -lpthread -o $so $loadflags`
 @show cmd
 run(cmd)
-

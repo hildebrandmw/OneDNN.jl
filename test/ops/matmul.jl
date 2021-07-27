@@ -9,10 +9,11 @@
     z = a * b
     @test size(Z) == (size(a, 1), size(b, 2))
     @test isapprox(Z, z)
+    @inferred *(a, b)
 
-    Z = OneDNN.materialize(OneDNN.matmul(
-        OneDNN.Memory(transpose(b)), OneDNN.Memory(transpose(a))
-    ))
+    Z = OneDNN.materialize(
+        OneDNN.matmul(OneDNN.Memory(transpose(b)), OneDNN.Memory(transpose(a)))
+    )
     @test isapprox(transpose(Z), z)
 
     # Do pullbacks work?

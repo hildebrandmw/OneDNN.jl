@@ -131,7 +131,7 @@ function Base.:(==)(a::MaybeRef{MemoryDesc}, b::MaybeRef{MemoryDesc})
     return Bool(Lib.dnnl_memory_desc_equal(wrap_ref(a), wrap_ref(b)))
 end
 
-getbytes(a::MaybeRef{MemoryDesc}) = Lib.dnnl_memory_desc_get_size(wrap_ref(a))
+getbytes(a::MaybeRef{MemoryDesc}) = signed(Lib.dnnl_memory_desc_get_size(wrap_ref(a)))
 
 #####
 ##### Memory
@@ -277,20 +277,20 @@ end
 #####
 
 function Base.similar(
-    M::Memory,
-    ::Type{T} = eltype(M),
-    dims::NTuple{N,Int} = size(M),
-    desc::MemoryDesc = memorydesc(M),
-) where {T,N}
+    x::Memory{<:Any,M},
+    ::Type{T} = eltype(x),
+    dims::NTuple{N,Int} = size(x),
+    desc::MemoryDesc = (M == N) ? memorydesc(x) : memorydesc(T, dims),
+) where {T,M,N}
     # Number of bytes to allocate.
     # Since OneDNN is free to reorder and pad, we need to explicitly ask it.
-    bytes = Int(getbytes(desc))
+    bytes = getbytes(desc)
 
     # Allocate the output array.
     # This will be allocated as just a plain vector with dimensions padded with ones so it
     # has the same dimension as the wrapped "Memory"
     padded_dims = (div(bytes, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
-    out = similar(M.array, T, padded_dims)
+    out = similar(x.array, T, padded_dims)
 
     # Since we specifically created this array, the offset will always start atone.
     return Memory(out, 1, dims, MemoryPtr(out, desc))

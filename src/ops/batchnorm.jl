@@ -2,35 +2,6 @@
 batchnorm_flags(::typeof(identity)) = Lib.dnnl_use_scaleshift
 batchnorm_flags(::typeof(Flux.relu)) = Lib.dnnl_use_scaleshift | Lib.dnnl_fuse_norm_relu
 
-function execute_batchnorm(
-    ::typeof(identity),
-    primitive::Primitive,
-    desc::PrimitiveDescriptor,
-    src,
-    scale_shift,
-    dst,
-    mean,
-    variance,
-)
-    execute!(primitive, @dnnl_args src scale_shift dst mean variance)
-    return (; dst, mean, variance, workspace = nothing, forward = noforward())
-end
-
-function execute_batchnorm(
-    ::typeof(Flux.relu),
-    primitive::Primitive,
-    desc::PrimitiveDescriptor,
-    src,
-    scale_shift,
-    dst,
-    mean,
-    variance,
-)
-    workspace = similar(src)
-    execute!(primitive, @dnnl_args src scale_shift dst mean variance workspace)
-    return (; dst, mean, variance, workspace, forward = desc)
-end
-
 function batchnorm_forward_training(
     src::Memory,
     scale_shift::Memory,
@@ -38,25 +9,26 @@ function batchnorm_forward_training(
     epsilon = 1f-10,
     attributes = noattributes(),
 ) where {F<:Union{typeof(identity),typeof(Flux.relu)}}
-    batch_normalization_desc = Ref{Lib.dnnl_batch_normalization_desc_t}()
-
     flags = batchnorm_flags(activation)
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     @apicall dnnl_batch_normalization_forward_desc_init(
-        batch_normalization_desc, Lib.dnnl_forward_training, src, epsilon, flags
+        opdesc, Training(), src, epsilon, flags
     )
 
-    return temp_primitive(
-        batch_normalization_desc, attributes, global_engine(), noforward()
-    ) do primitive, primitive_desc
+    return temp_primitive(opdesc, attributes, global_engine(), noforward()) do p, pd
         dst = similar(src)
-
-        # Allocate mean and variance tensors as well.
-        md = memorydesc(eltype(src), (size(src, ndims(src) - 1),), Lib.dnnl_a)
-        mean = similar(src, eltype(src), (size(src, ndims(src) - 1),), md)
+        mean = similar(src, eltype(src), (size(src, ndims(src) - 1),))
         variance = similar(mean)
-        return execute_batchnorm(
-            activation, primitive, primitive_desc, src, scale_shift, dst, mean, variance
-        )
+
+        # Fuse the Relu activation function is possible.
+        if activation === Base.identity
+            execute!(p, @dnnl_args src scale_shift dst mean variance)
+            return (; dst, mean, variance, workspace = nothing, forward = noforward())
+        elseif activation === Flux.relu
+            workspace = similar(src)
+            execute!(p, @dnnl_args src scale_shift dst mean variance workspace)
+            return (; dst, mean, variance, workspace, forward = pd)
+        end
     end
 end
 
@@ -71,15 +43,13 @@ function batchnorm_backward(
     attributes = noattributes(),
     workspace = nothing,
 )
-    batch_normalization_desc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     flags = (workspace === nothing) ? batchnorm_flags(identity) : batchnorm_flags(Flux.relu)
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     @apicall dnnl_batch_normalization_backward_desc_init(
-        batch_normalization_desc, Lib.dnnl_backward, diff_dst, src, epsilon, flags
+        opdesc, Lib.dnnl_backward, diff_dst, src, epsilon, flags
     )
 
-    return temp_primitive(
-        batch_normalization_desc, attributes, global_engine(), forward
-    ) do primitive, primitive_desc
+    return temp_primitive(opdesc, attributes, global_engine(), forward) do p, pd
         diff_src = similar(src)
         diff_scale_shift = similar(scale_shift)
         args = @dnnl_args diff_dst src mean variance scale_shift diff_src diff_scale_shift
@@ -87,7 +57,7 @@ function batchnorm_backward(
         if workspace !== nothing
             args = append(args, @dnnl_args workspace)
         end
-        execute!(primitive, args)
+        execute!(p, args)
         return (; diff_src, diff_scale_shift)
     end
 end

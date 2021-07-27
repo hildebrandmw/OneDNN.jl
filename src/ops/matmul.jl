@@ -1,52 +1,37 @@
 # TODO: Add more methods of "mul!" as they become applicable.
 function matmul(
-    _weights,
-    _src;
+    weights::Memory{T},
+    src::Memory{T};
     bias = nothing,
     forward = noforward(),
     attributes = noattributes(),
-)
-    # Maybe convert arguments if they haven't been converted yet.
-    src = Memory(_src)
-    weights = Memory(_weights)
-
+) where {T}
     dst_dims = matmul_dst_dims(size(src), size(weights))
-    dst_format = dnnl_format_any()
-    dst_desc = memorydesc(promote_type(eltype(src), eltype(weights)), dst_dims, dst_format)
+    dst_md = memorydesc(T, dst_dims, dnnl_format_any())
 
-    matmul_desc = Ref{Lib.dnnl_matmul_desc_t}()
-    @apicall dnnl_matmul_desc_init(matmul_desc, src, weights, Ptr{MemoryDesc}(), dst_desc)
+    opdesc = Ref{Lib.dnnl_matmul_desc_t}()
+    @apicall dnnl_matmul_desc_init(opdesc, src, weights, Ptr{MemoryDesc}(), dst_md)
 
-    return temp_primitive(
-        matmul_desc, attributes, global_engine(), forward
-    ) do primitive, primitive_desc
-        # Get the output format to create the destination.
-        dst_desc_opt = query_md(primitive_desc, Lib.dnnl_query_dst_md)
-        # N.B.: Recompute destination eltype inside the closure to help type inference.
-        dst = similar(src, promote_type(eltype(src), eltype(weights)), dst_dims, dst_desc_opt)
-        execute!(primitive, @dnnl_args src weights dst)
+    return temp_primitive(opdesc, attributes, global_engine(), forward) do p, pd
+        dst_md = query_md(pd, @query(dst))
+        dst = similar(src, T, dst_dims, dst_md)
+        execute!(p, @dnnl_args src weights dst)
         return dst
     end
 end
 
 function matmul!(
-    _dst,
-    _weights,
-    _src;
+    _dst::Memory,
+    _weights::Memory,
+    _src::Memory;
     forward = noforward(),
-    attributes = noattributes()
+    attributes = noattributes(),
 )
-    dst = Memory(_dst)
-    weights = Memory(_weights)
-    src = Memory(_src)
+    opdesc = Ref{Lib.dnnl_matmul_desc_t}()
+    @apicall dnnl_matmul_desc_init(opdesc, src, weights, Ptr{MemoryDesc}(), dst)
 
-    matmul_desc = Ref{Lib.dnnl_matmul_desc_t}()
-    @apicall dnnl_matmul_desc_init(matmul_desc, src, weights, Ptr{MemoryDesc}(), dst)
-
-    temp_primitive(
-        matmul_desc, attributes, global_engine(), forward
- ) do primitive, primitive_desc
-        execute!(primitive, @dnnl_args src weights dst)
+    temp_primitive(opdesc, attributes, global_engine(), forward) do p, _
+        execute!(p, @dnnl_args src weights dst)
     end
     return dst
 end

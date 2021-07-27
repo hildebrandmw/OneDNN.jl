@@ -75,8 +75,9 @@ function validate(layout::MemoryLayout{N}) where {N}
                 saw_int && error("Integer index $index occurs more than once!")
                 saw_int = true
             elseif isa(desc, Tile) && desc.dim == index
-                saw_int &&
-                    error("Integer index $index occurs before its corresponding tile index!")
+                saw_int && error(
+                    "Integer index $index occurs before its corresponding tile index!"
+                )
                 saw_tile = true
             end
         end
@@ -231,7 +232,9 @@ function TiledIndexer{L}(size::NTuple{N,Int}, padded_size::NTuple{N,Int}) where 
 end
 
 function genindex(x::TiledIndexer{L,N}, I::NTuple{N,Int}) where {L,N}
-    return 1 + getoffset(Val(L), x.padded_size, adjust_for_padding(x.size, x.padded_size, I .- 1))
+    return 1 + getoffset(
+        Val(L), x.padded_size, adjust_for_padding(x.size, x.padded_size, I .- 1)
+    )
 end
 
 # function genindex(x::TiledIndexer{L,N,Nothing}, I::NTuple{N,Int}) where {L,N}

@@ -35,12 +35,14 @@ include("ops/batchnorm.jl")
 include("ops/concat.jl")
 include("ops/pool.jl")
 include("ops/innerproduct.jl")
+include("ops/convolution.jl")
 
 # include("placeholder.jl")
 
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()
 const GLOBAL_STREAM = Ref{Stream}()
+const GLOBAL_ATTRIBUTES = Ref{Attributes}()
 const GLOBAL_THREADPOOL = Ref{Any}()
 
 _get_in_parallel() = (Threads.threadid() != 1)
@@ -53,10 +55,13 @@ end
 
 # Initialize the default Engine and Stream.
 function __init__()
+    ### Engine
     engine = Engine(Lib.dnnl_cpu)
     GLOBAL_ENGINE[] = engine
 
-    # Create a thread pool.
+    ### Thread Pool
+    # The functions we create do not capture any variables, thus no need to preserve them
+    # somewhere.
     threadpool = Wrap.construct_threadpool(
         @cfunction(_get_in_parallel, Bool, ()),
         @cfunction(_parallel_for, Cvoid, (Cint, Ptr{Cvoid})),
@@ -64,14 +69,18 @@ function __init__()
     )
     GLOBAL_THREADPOOL[] = threadpool
 
+    ### Stream
     stream = Stream(engine)
-    @apicall dnnl_threadpool_interop_stream_create(
-        stream, engine, threadpool.cpp_object
-    )
+    @apicall dnnl_threadpool_interop_stream_create(stream, engine, threadpool.cpp_object)
     GLOBAL_STREAM[] = stream
+
+    ### Default Attributes
+    GLOBAL_ATTRIBUTES[] = Attributes()
+
     return nothing
 end
 
+noattributes() = GLOBAL_ATTRIBUTES[]
 global_engine() = GLOBAL_ENGINE[]
 global_stream() = GLOBAL_STREAM[]
 
@@ -145,38 +154,5 @@ end
 # # function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
 # #     return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
 # end
-
-function setup()
-    diff_weights_dims = (1024, 1024)
-    diff_bias_dims = (1024,)
-    diff_dst_dims = (1024, 2^15)
-    src_dims = (1024, 2^15)
-
-    diff_dst = OneDNN.Memory(randn(Float32, diff_dst_dims))
-    src = OneDNN.Memory(randn(Float32, src_dims))
-
-    diff_bias_desc = memorydesc(Float32, diff_bias_dims, Lib.dnnl_a)
-    inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
-    @apicall dnnl_inner_product_backward_weights_desc_init(
-        inner_product_desc,
-        memorydesc(Float32, src_dims, dnnl_format_any()),
-        memorydesc(Float32, diff_weights_dims, dnnl_format_any()),
-        diff_bias_desc,
-        memorydesc(Float32, diff_dst_dims, dnnl_format_any()),
-    )
-
-    primitive_desc = __PrimitiveDescriptor(
-        inner_product_desc, noattributes(), global_engine(), noforward()
-    )
-    primitive = __Primitive(primitive_desc)
-
-    diff_weights_desc_opt = query_md(primitive_desc, Lib.dnnl_query_diff_weights_md)
-    diff_weights = similar(
-        diff_dst, eltype(diff_dst), diff_weights_dims, diff_weights_desc_opt
-    )
-
-    diff_bias = similar(diff_dst, eltype(diff_dst), diff_bias_dims, diff_bias_desc)
-    return (; primitive, primitive_desc, src, diff_bias, diff_weights, diff_dst)
-end
 
 end # module
