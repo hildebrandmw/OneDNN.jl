@@ -1,14 +1,18 @@
 module OneDNN
 
 # stdlib
-using LinearAlgebra: LinearAlgebra
+import LinearAlgebra
+
+# temp local teps
+import CachedArrays
 
 # deps
-using ChainRulesCore: ChainRulesCore
-using Flux: Flux
-using MacroTools: MacroTools
-using Polyester: Polyester
-using Zygote: Zygote
+import ChainRulesCore
+import Flux
+import MacroTools
+import Polyester
+import UnPack: @unpack
+import Zygote
 
 #####
 ##### deps
@@ -27,7 +31,9 @@ include("memory.jl")
 # ops
 include("ops/simple.jl")
 include("ops/matmul.jl")
+include("ops/batchnorm.jl")
 include("ops/concat.jl")
+include("ops/pool.jl")
 include("ops/innerproduct.jl")
 
 # include("placeholder.jl")

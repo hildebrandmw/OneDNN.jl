@@ -99,6 +99,13 @@ function _PrimitiveDescriptor(f::F, args::Vararg{Any,N}) where {F<:Function,N}
     return descriptor
 end
 
+function Base.copy(x::PrimitiveDescriptor)
+    y = PrimitiveDescriptor(InnerConstructor())
+    @apicall dnnl_primitive_desc_clone(y, x)
+    attach_finalizer!(y)
+    return y
+end
+
 noforward() = Ptr{Lib.dnnl_primitive_desc}()
 
 @wrap_type Primitive dnnl_primitive_t dnnl_primitive_destroy
@@ -187,13 +194,34 @@ end
 
 # Automatically apply recursively to tuples.
 kernel_exit_hook(x) = x
-kernel_exit_hook(x::Tuple) = map(kernel_exit_hook, x)
+kernel_exit_hook(x::Union{<:Tuple, <:NamedTuple}) = map(kernel_exit_hook, x)
 
 function temp_primitive(f::F, args::Vararg{Any,N}) where {F,N}
     desc = _PrimitiveDescriptor(args...)
     primitive = _Primitive(desc)
     ret = f(primitive, desc)
-    destroy(primitive, desc)
+    ret_wrapped = wrap_tuple(ret)
+    maybe_destroy(walk_results(ret_wrapped, primitive))
+    maybe_destroy(walk_results(ret_wrapped, desc))
     return kernel_exit_hook(ret)
+end
+
+wrap_tuple(x) = (x,)
+wrap_tuple(x::Tuple) = x
+wrap_tuple(x::NamedTuple) = Tuple(x)
+
+maybe_destroy(::Tuple{}) = nothing
+maybe_destroy(x) = destroy(x)
+
+walk_results(x::Tuple, y::Tuple{}) = ()
+walk_results(x::Tuple, y) = walk_results(Base.tail(x), maybe_finalize(x[1], y))
+walk_results(x::Tuple{}, y) = y
+walk_results(x::Tuple{}, y::Tuple{}) = y
+
+maybe_finalize(x, y) = y
+function maybe_finalize(x::T, y::T) where {T}
+    println("Attaching Finalizer!")
+    attach_finalizer!(y)
+    return ()
 end
 

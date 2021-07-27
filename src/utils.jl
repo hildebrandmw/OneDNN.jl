@@ -110,6 +110,11 @@ const CONTEXT_MAP = [
     "DST" => _W,
     "FROM" => _R,
     "TO" => _W,
+    "SCALE_SHIFT" => _R,
+    "DIFF_SFALE_SHIFT" => _W,
+    "MEAN" => _R,
+    "VARIANCE" => _R,
+    "WORKSPACE" => _W,
 ]
 
 macro dnnl_args(syms...)
@@ -174,6 +179,7 @@ Base.getindex(x::Arguments, i) = getindex(x.args, i)
 Base.lastindex(x::Arguments) = lastindex(x.args)
 
 append(x::Arguments{<:Tuple}, arg::Lib.dnnl_exec_arg_t) = Arguments(x.args..., arg)
+append(x::Arguments{<:Tuple}, y::Arguments{<:Tuple}) = Arguments(x.args..., y.args...)
 append(x::Arguments{<:AbstractVector}, arg::Lib.dnnl_exec_arg_t) = push!(x.args, arg)
 
 #####

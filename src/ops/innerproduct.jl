@@ -13,6 +13,7 @@ function innerproduct(
     dst_dims = (size(bias, 1), size(_src, 2))
     dst_desc = memorydesc(eltype(_src), dst_dims, dnnl_format_any())
     inner_product_desc = Ref{Lib.dnnl_inner_product_desc_t}()
+    @show (size(_src), size(_weights), dst_dims)
     @apicall dnnl_inner_product_forward_desc_init(
         inner_product_desc, kind, src_desc, weights_desc, bias, dst_desc
     )
@@ -135,6 +136,14 @@ Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m
 Flux.@functor Dense (weights, bias)
 
 function (dense::Dense)(_src, fuse_activation = true)
+    #####
+    ##### TODO: Remove
+    #####
+
+    CachedArrays.prefetch!(_src)
+    CachedArrays.prefetch!(dense.weights)
+    CachedArrays.prefetch!(dense.bias)
+
     src = Memory(_src)
     attributes = Attributes()
     if fuse_activation
@@ -179,7 +188,7 @@ function rrule_fused(dense::T, _src, _fuse_activation) where {T}
     src = Memory(_src)
     src_size = size(src)
     dst = dense(src, true)
-    pullback = function dense_fused_pullback(_diff_dst)
+    function dense_fused_pullback(_diff_dst)
         # Maybe convert argument
         diff_dst = Memory(_diff_dst)
         # Reverse activation function.
@@ -199,7 +208,7 @@ function rrule_fused(dense::T, _src, _fuse_activation) where {T}
             ChainRulesCore.NoTangent(),
         )
     end
-    return dst, pullback
+    return dst, dense_fused_pullback
 end
 
 function rrule_unfused(dense::T, _src, _fuse_activation) where {T}
@@ -207,13 +216,15 @@ function rrule_unfused(dense::T, _src, _fuse_activation) where {T}
     dst_pre = dense(src, false)
     dst = eltwise(dense.activation, dst_pre)
     src_size = size(src)
-    pullback = function dense_pullback(_diff_dst)
+    function dense_pullback(_diff_dst)
         diff_dst = Memory(_diff_dst)
         diff_dst_pre = eltwise_backward(dense.activation, diff_dst, dst_pre)
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
-        (
-            diff_weights, diff_bias
-        ) = innerproduct_backward_weights(size(dense.weights), src, diff_dst_pre)
+        (diff_weights, diff_bias) = innerproduct_backward_weights(
+            size(dense.weights),
+            src,
+            diff_dst_pre,
+        )
 
         return (
             ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
@@ -221,5 +232,5 @@ function rrule_unfused(dense::T, _src, _fuse_activation) where {T}
             ChainRulesCore.NoTangent(),
         )
     end
-    return dst, pullback
+    return dst, dense_pullback
 end
