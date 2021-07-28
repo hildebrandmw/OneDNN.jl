@@ -1,33 +1,6 @@
-"""
-    convolution(
-        _src::Memory,
-        _weights::Memory,
-        bias::Memory,
-        out_channel::Int32,
-        stride::T,
-        padding::T;
-        prop_kind    = Lib.dnnl_forward_inference,
-        alg_kind     = Lib.dnnl_convolution_direct,
-        attributes   = noattributes(),
-        src_desc     = memorydesc(_src),
-        weights_desc = memorydesc(_weights),
-        callback     = (x...) -> nothing,
-    )
-
-Generates the resulting convolution based on a given output.
-
-# Examples
-```jldoctest
-julia>
-
-julia>
-
-julia>
-```
-"""
 function convolution(
     _src::Memory{T},
-    _weights::Memory,
+    _weights::Memory{T},
     bias::Memory,
     dims::Dims{N};
     kind = Inference(),
@@ -67,96 +40,87 @@ function convolution(
 
         # Run kernel
         execute!(p, @dnnl_args src weights bias dst)
-        return dst
+        if kind === Inference()
+            return dst
+        elseif kind === Training()
+            return (; dst, forward = pd)
+        end
     end
 end
 
-# function convolution_backward_data(
-#     diff_src_dims::NTuple,
-#     _weights::Memory,
-#     _diff_dst::Memory,
-#     stride,
-#     padding,
-#     alg_kind = Lib.dnnl_convolution_direct,
-# )
-#     diff_src_desc = memorydesc(eltype(_diff_dst), diff_src_dims, dnnl_format_any())
-#     conv_desc = Ref{Lib.dnnl_convolution_desc_t}
-#     @apicall dnnl_convolution_backward_data_desc_init(
-#         conv_desc,
-#         alg_kind,
-#         diff_src_desc,
-#         toany(_weights),
-#         toany(_diff_dst),
-#         stride,
-#         padding,
-#         padding,
-#     )
-#
-#     return temp_primitive(
-#         conv_desc, noattributes(), global_engine(), noforward()
-#     ) do primitive, primitive_descriptor
-#         weights = maybe_reorder(primitive_descriptor, _weights, Lib.dnnl_query_weights_md)
-#         diff_dst = maybe_reorder(
-#             primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md
-#         )
-#
-#         diff_src_desc_opt = query_md(primitive_descriptor, Lib.dnnl_query_diff_src_md)
-#         diff_src = similar(diff_dst, eltype(diff_dst), diff_src_dims, diff_src_desc_opt)
-#         execute!(primitive, @dnnl_args diff_src weights diff_dst)
-#         return diff_src
-#     end
-# end
-#
-# function convolution_backward_weights(
-#     diff_weights_dims::NTuple,
-#     _src::Memory,
-#     _diff_dst::Memory,
-#     stride,
-#     padding,
-#     alg_kind = Lib.dnnl_convolution_direct,
-# )
-#     diff_bias_dims = (diff_weights_dims[2],)
-#     diff_weights_desc = memorydesc(eltype(_src), diff_weights_dims, dnnl_format_any())
-#     diff_bias_desc = memorydesc(eltype(_src), diff_bias_dims, Lib.dnnl_a)
-#     conv_desc = Ref{Lib.dnnl_convolution_desc_t}()
-#
-#     @apicall dnnl_convolution_backward_weights_desc_init(
-#         convolution_desc,
-#         alg_kind,
-#         toany(_src),
-#         diff_weights_desc,
-#         diff_bias_desc,
-#         toany(_diff_dst),
-#         stride,
-#         padding,
-#         padding,
-#     )
-#
-#     return temp_primitive(
-#         conv_desc, noattributes(), global_engine(), noforward()
-#     ) do primitive, primitive_descriptor
-#         # Maybe convert arguments
-#         src = maybe_reorder(primitive_descriptor, _src, Lib.dnnl_query_src_md)
-#         diff_dst = maybe_reorder(
-#             primitive_descriptor, _diff_dst, Lib.dnnl_query_diff_dst_md
-#         )
-#
-#         # Materialize destinations
-#         diff_weights_desc_opt = query_md(
-#             primitive_descriptor, Lib.dnnl_query_diff_weights_md
-#         )
-#         diff_weights = similar(
-#             diff_dst, eltype(diff_dst), diff_weights_dims, diff_weights_desc_opt
-#         )
-#
-#         diff_bias = similar(diff_dst, eltype(diff_dst), diff_bias_dims, diff_bias_desc)
-#         execute!(primitive, @dnnl_args diff_weights diff_bias src diff_dst)
-#         return (diff_weights, diff_bias)
-#     end
-# end
+function convolution_backward_data(
+    diff_src_dims::NTuple,
+    _weights::Memory{T},
+    _diff_dst::Memory{T},
+    dims::Dims;
+    forward,
+    algo = Lib.dnnl_convolution_auto,
+) where {T}
+    diff_src_md = memorydesc(T, diff_src_dims, dnnl_format_any())
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
+    @apicall dnnl_convolution_backward_data_desc_init(
+        opdesc,
+        algo,
+        diff_src_md,
+        toany(_weights),
+        toany(_diff_dst),
+        dims.strides,
+        dims.padding,
+        dims.padding,
+    )
+
+    return temp_primitive(opdesc, noattributes(), global_engine(), forward) do p, pd
+        weights = maybe_reorder(pd, _weights, @query(weights))
+        diff_dst = maybe_reorder(pd, _diff_dst, @query(diff_dst))
+
+        diff_src_md = query_md(pd, @query(diff_src))
+        diff_src = similar(diff_dst, T, diff_src_dims, diff_src_md)
+        execute!(p, @dnnl_args diff_src weights diff_dst)
+        return diff_src
+    end
+end
+
+function convolution_backward_weights(
+    diff_weights_dims::NTuple{N},
+    _src::Memory{T},
+    _diff_dst::Memory{T},
+    dims::Dims;
+    forward,
+    algo = Lib.dnnl_convolution_auto,
+) where {T,N}
+    diff_bias_dims = (diff_weights_dims[N],)
+    diff_weights_md = memorydesc(T, diff_weights_dims, dnnl_format_any())
+    diff_bias_md = memorydesc(T, diff_bias_dims)
+
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
+    @apicall dnnl_convolution_backward_weights_desc_init(
+        opdesc,
+        algo,
+        toany(_src),
+        diff_weights_md,
+        diff_bias_md,
+        toany(_diff_dst),
+        dims.strides,
+        dims.padding,
+        dims.padding,
+    )
+
+    return temp_primitive(opdesc, noattributes(), global_engine(), forward) do p, pd
+        # Maybe convert arguments
+        src = maybe_reorder(pd, _src, @query(src))
+        diff_dst = maybe_reorder(pd, _diff_dst, @query(diff_dst))
+
+        # Materialize destinations
+        diff_weights_md = query_md(pd, @query(diff_weights))
+        diff_weights = similar(diff_dst, T, diff_weights_dims, diff_weights_md)
+        diff_bias = similar(diff_dst, T, diff_bias_dims, diff_bias_md)
+
+        execute!(p, @dnnl_args diff_weights diff_bias src diff_dst)
+        return (diff_weights, diff_bias)
+    end
+end
 
 ## Convolutional layer
-
 mutable struct Conv{W<:Memory,B<:Memory,F,N}
     weights::W
     bias::B
@@ -230,15 +194,15 @@ end
 Flux.@functor Conv (weights, bias)
 
 ## This notation is a functor (adds functionality to struct
-function (conv::Conv)(_src, fuse_activation = true)
+function (conv::Conv)(_src, fuse_activation = true; kw...)
     src = Memory(_src)
     attributes = fuse_activation ? conv.attributes : noattributes()
 
     if conv.optimized_weights == false
         # Prepare a callback to capture the optimized memory format.
-        optimized_weights_desc = Ref{MemoryDesc}()
+        weights_md = Ref{MemoryDesc}()
         function weight_opt_callback(_, pd)
-            optimized_weights_desc[] = query_md(pd, @query(weights))
+            weights_md[] = query_md(pd, @query(weights))
             return nothing
         end
 
@@ -248,37 +212,33 @@ function (conv::Conv)(_src, fuse_activation = true)
             conv.bias,
             conv.dims;
             attributes = attributes,
-            src_desc = toany(src),
-            weights_desc = toany(conv.weights),
+            src_md = toany(src),
+            weights_md = toany(conv.weights),
             callback = weight_opt_callback,
+            kw...,
         )
 
-        if optimized_weights_desc[] != memorydesc(conv.weights)
-            conv.weights = reorder(optimized_weights_desc[], conv.weights)
-        end
+        conv.weights = maybe_reorder(weights_md[], conv.weights)
         conv.optimized_weights = true
         return dst
     else
         return convolution(
-            src, conv.weights, conv.bias, conv.dims; attributes, src_md = toany(src)
+            src, conv.weights, conv.bias, conv.dims; attributes, src_md = toany(src), kw...
         )
     end
 end
 
-function ChainRulesCore.rrule(conv::Conv, src::AbstractMatrix, fuse_activation::Bool)
+function ChainRulesCore.rrule(conv::Conv, src::AbstractArray, _fuse_activation = false)
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
-    return if canfuse(conv.activation)
-        rrule_fused(conv, src, fuse_activation)
-    else
-        rrule_unfused(conv, src, fuse_activation)
-    end
+    return canfuse(conv.activation) ? rrule_fused(conv, src) : rrule_unfused(conv, src)
 end
 
-function rrule_fused(conv::T, _src, _fuse_activation) where {T<:Conv}
+function rrule_fused(conv::T, _src) where {T<:Conv}
     src = Memory(_src)
     src_size = size(src)
-    dst = conv(src, true)
-    pullback = function conv_fused_pullback(_diff_dst)
+    nt = conv(src, true; kind = Training())
+    @unpack dst, forward = nt
+    function conv_fused_pullback(_diff_dst)
         # Maybe convert argument
         diff_dst = Memory(_diff_dst)
         # Reverse activation function.
@@ -286,10 +246,10 @@ function rrule_fused(conv::T, _src, _fuse_activation) where {T<:Conv}
 
         # Backprop convolution kernel
         diff_src = convolution_backward_data(
-            src_size, conv.weights, diff_dst_pre, conv.stride, conv.padding
+            src_size, conv.weights, diff_dst_pre, conv.dims; forward
         )
         (diff_weights, diff_bias) = convolution_backward_weights(
-            size(conv.weights), src, diff_dst_pre, conv.stride, conv.padding
+            size(conv.weights), src, diff_dst_pre, conv.dims; forward
         )
 
         return (
@@ -298,22 +258,23 @@ function rrule_fused(conv::T, _src, _fuse_activation) where {T<:Conv}
             ChainRulesCore.NoTangent(),
         )
     end
-    return dst, pullback
+    return dst, conv_fused_pullback
 end
 
-function rrule_unfused(conv::T, _src, _fuse_activation) where {T<:Conv}
+function rrule_unfused(conv::T, _src) where {T<:Conv}
     src = Memory(_src)
-    dst_pre = conv(src, false)
+    nt = conv(src, false; kind = Training())
+    dst_pre, forward = nt.dst, nt.forward
     dst = eltwise(conv.activation, dst_pre)
     src_size = size(src)
-    pullback = function conv_pullback(_diff_dst)
+    function conv_pullback(_diff_dst)
         diff_dst = Memory(_diff_dst)
         diff_dst_pre = eltwise_backward(conv.activation, diff_dst, dst_pre)
         diff_src = convolution_backward_data(
-            src_size, conv.weights, diff_dst_pre, conv.stride, conv.padding
+            src_size, conv.weights, diff_dst_pre, conv.dims; forward
         )
         (diff_weights, diff_bias) = convolution_backward_weights(
-            size(conv.weights), src, diff_dst_pre, conv.stride, conv.padding
+            size(conv.weights), src, diff_dst_pre, conv.dims; forward
         )
 
         return (
@@ -322,5 +283,6 @@ function rrule_unfused(conv::T, _src, _fuse_activation) where {T<:Conv}
             ChainRulesCore.NoTangent(),
         )
     end
-    return dst, pullback
+    return dst, conv_pullback
 end
+
