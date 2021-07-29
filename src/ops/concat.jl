@@ -1,7 +1,7 @@
-function concat(A::Vector{<:Memory{T,N}}, dim::Integer) where {T,N}
-    nargs = length(A)
-    outputdim = sum(i -> size(i, dim), A)
-    dims = size(first(A))
+function concat(multiple_src::TupleOrVector{<:Memory{T,N}}, dim::Integer) where {T,N}
+    nargs = length(multiple_src)
+    outputdim = sum(i -> size(i, dim), multiple_src)
+    dims = size(first(multiple_src))
     dst_dims = ntuple(i -> (i == dim) ? outputdim : dims[i], Val(N))
     dst_md = memorydesc(T, dst_dims, dnnl_format_any())
 
@@ -10,19 +10,13 @@ function concat(A::Vector{<:Memory{T,N}}, dim::Integer) where {T,N}
         dst_md,
         nargs,
         N - dim,
-        map(memorydesc, A),
+        map(memorydesc, multiple_src),
         noattributes(),
         global_engine(),
     ) do p, pd
         dst_md = query_md(pd, @query(dst))
-        dst = similar(first(A), T, dst_dims, dst_md)
-        # TODO: Let the macro handle this?
-        args = Arguments(Vector{Lib.dnnl_exec_arg_t}(undef, nargs + 1))
-        for (i, _a) in enumerate(A)
-            args[i] = dnnl_arg(Lib.DNNL_ARG_MULTIPLE_SRC + i - 1, _a)
-        end
-        args[end] = dnnl_arg(Lib.DNNL_ARG_DST, dst)
-        execute!(p, args)
+        dst = similar(first(multiple_src), T, dst_dims, dst_md)
+        execute!(p, @dnnl_args dst multiple_src)
         return dst
     end
 end
@@ -33,7 +27,7 @@ end
 
 # TODO: See if the #15276 style problems still exist in Julia 1.6.
 #
-# map` seems to be having Julia issue #15276 is problems when keeping track of where
+# `map` seems to be having Julia issue #15276 is problems when keeping track of where
 # we are indexing to create views.
 #
 # As such, we have to build this `Slicer` struct below in order to give inference
@@ -57,11 +51,11 @@ end
 #####
 
 function ChainRulesCore.rrule(
-    ::typeof(concat), A::Vector{T}, dim::Integer
+    ::typeof(concat), multiple_src::TupleOrVector{T}, dim::Integer
 ) where {T<:Memory}
     # Capture sizes for reconstruction.
-    lengths = size.(A, dim)
-    dst = concat(A, dim)
+    lengths = size.(multiple_src, dim)
+    dst = concat(multiple_src, dim)
 
     function concat_pullback(Δ)
         f = Slicer(1, dim, materialize(Δ))

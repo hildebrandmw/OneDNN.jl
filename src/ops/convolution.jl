@@ -1,3 +1,5 @@
+droplast(x::Tuple) = (x[1:end-1]...,)
+
 function convolution(
     _src::Memory{T},
     _weights::Memory{T},
@@ -10,7 +12,7 @@ function convolution(
     weights_md = memorydesc_ptr(_weights),
     callback = (x...) -> nothing,
 ) where {T,N}
-    dst_dims = output_size(size(_src), dims)
+    dst_dims = tuple_replace(output_size(size(_src), dims), size(_weights, 4), Val(3))
     dst_md = memorydesc(T, dst_dims, dnnl_format_any())
 
     opdesc = Ref{Lib.dnnl_convolution_desc_t}()
@@ -132,6 +134,7 @@ end
 
 function Conv(
     _weights::AbstractArray{T,N},
+    _bias::AbstractVector{T},
     activation = identity;
     stride = 1,
     padding = 0,
@@ -144,7 +147,7 @@ function Conv(
 
     dims = Dims{2}(kernel, stride, dilation, padding)
     weights = Memory(_weights)
-    bias = similar(weights, size(weights, N))
+    bias = Memory(_bias)
 
     # Create attributes for fusing the postop.
     attributes = Attributes()
@@ -152,6 +155,24 @@ function Conv(
     eltwise!(postops, activation)
     append!(attributes, postops)
     return Conv(weights, bias, activation, dims, attributes, false)
+end
+
+_slice(x::NTuple{N}) where {N} = ntuple(i -> x[(2 * i) - 1], Val(div(N,2)))
+_subone(x::NTuple{N}) where {N} = ntuple(i -> x[i] - 1, Val(N))
+
+# Note: OneDNN's convolution is Flux's CrossCor
+function Conv(m::Flux.CrossCor)
+    # Flux stores its padding as a 2N tuple.
+    # Since we're just using symmetrical padding for now, we grab slice every other
+    # padding value.
+    return Conv(
+        m.weight,
+        m.bias,
+        m.σ;
+        m.stride,
+        padding = _slice(m.pad),
+        dilation = _subone(m.dilation),
+    )
 end
 
 # function Conv(
@@ -228,13 +249,13 @@ function (conv::Conv)(_src, fuse_activation = true; kw...)
     end
 end
 
-function ChainRulesCore.rrule(conv::Conv, src::AbstractArray, _fuse_activation = false)
+function ChainRulesCore.rrule(conv::Conv, _src::AbstractArray, _fuse_activation = false)
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
+    src = Memory(_src)
     return canfuse(conv.activation) ? rrule_fused(conv, src) : rrule_unfused(conv, src)
 end
 
-function rrule_fused(conv::T, _src) where {T<:Conv}
-    src = Memory(_src)
+function rrule_fused(conv::T, src) where {T<:Conv}
     src_size = size(src)
     nt = conv(src, true; kind = Training())
     @unpack dst, forward = nt
@@ -273,6 +294,7 @@ function rrule_unfused(conv::T, _src) where {T<:Conv}
         diff_src = convolution_backward_data(
             src_size, conv.weights, diff_dst_pre, conv.dims; forward
         )
+
         (diff_weights, diff_bias) = convolution_backward_weights(
             size(conv.weights), src, diff_dst_pre, conv.dims; forward
         )

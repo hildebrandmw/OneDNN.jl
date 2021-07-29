@@ -42,7 +42,7 @@ function pooling_forward(
 end
 
 function pooling_backward(
-    diff_dst::Memory{T,N},
+    _diff_dst::Memory{T,N},
     diff_src_md::MemoryDesc,
     dims::Dims;
     algo = Lib.dnnl_pooling_max,
@@ -54,7 +54,7 @@ function pooling_backward(
         opdesc,
         algo,
         diff_src_md,
-        diff_dst,
+        toany(_diff_dst),
         dims.strides,
         dims.kernel,
         dims.dilation,
@@ -63,6 +63,7 @@ function pooling_backward(
     )
 
     return temp_primitive(opdesc, noattributes(), global_engine(), forward) do p, pd
+        diff_dst = maybe_reorder(pd, _diff_dst, @query(diff_dst))
         diff_src_md = query_md(pd, @query(diff_src))
         diff_src = similar(diff_dst, T, logicalsize(diff_src_md, Val(N)), diff_src_md)
         execute!(p, @dnnl_args diff_dst diff_src workspace)

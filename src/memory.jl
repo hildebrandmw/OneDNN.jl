@@ -45,6 +45,8 @@ dnnl_format_any() = Lib.dnnl_format_tag_any
 #####
 
 const MemoryDesc = Lib.dnnl_memory_desc_t
+dnnl_convert(x::NTuple{N,MemoryDesc}) where {N} = Ref(x)
+
 memorydesc(x::MemoryDesc) = x
 function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::MemoryDesc)
     return Base.cconvert(Ptr{Lib.dnnl_memory_desc_t}, Ref(x))
@@ -54,9 +56,9 @@ end
 logicalsize(md::MemoryDesc) = reverse(md.dims[1:(md.ndims)])
 logicalsize(md::MemoryDesc, v::Val) = reverse(ntuple(i -> md.dims[i], v))
 function Base.strides(md::MemoryDesc, v::Val)
-    #return reverse(ntuple(i -> md.format_desc.blocking.strides[i], v))
     return reverse(ntuple(i -> md.format_desc.strides[i], v))
 end
+
 function padded_size(md::MemoryDesc, v::Val)
     return reverse(ntuple(i -> md.padded_dims[i], v))
 end
@@ -180,7 +182,10 @@ end
 
 arraytype(::Memory{T,N,A}) where {T,N,A} = A
 
-Base.show(io::IO, x::Memory) = print(io, "Opaque Memory $(logicalsize(x))")
+function Base.show(io::IO, x::Memory)
+    print(io, "Opaque Memory $(logicalsize(x))")
+    x.offset != 1 && print(io, " - SubArray")
+end
 Base.show(io::IO, ::MIME"text/plain", x::Memory) = show(io, x)
 
 # for creating OneDNN arguments

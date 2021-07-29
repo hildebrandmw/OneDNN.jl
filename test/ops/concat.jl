@@ -64,11 +64,13 @@
     x, y, z = randn.(Float32, (10, 20, 30), 10)
     X, Y, Z = OneDNN.Memory.((x, y, z))
     tester(vcat, (x, y, z), OneDNN.concat, ([X, Y, Z], 1))
+    tester(vcat, (x, y, z), OneDNN.concat, ((X, Y, Z), 1))
 
     # hcat
     x, y, z = randn.(Float32, 10, (10, 20, 30))
     X, Y, Z = OneDNN.Memory.((x, y, z))
     tester(hcat, (x, y, z), OneDNN.concat, ([X, Y, Z], 2))
+    tester(hcat, (x, y, z), OneDNN.concat, ((X, Y, Z), 2))
 
     ### 3d
 
@@ -76,9 +78,11 @@
     x, y, z = randn.(Float32, (10, 20, 30), 10, 20)
     X, Y, Z = OneDNN.Memory.((x, y, z))
     tester(vcat, (x, y, z), OneDNN.concat, ([X, Y, Z], 1))
+    tester(vcat, (x, y, z), OneDNN.concat, ((X, Y, Z), 1))
 
     # hcat
     x, y, z = randn.(Float32, 10, (10, 20, 30), 20)
     X, Y, Z = OneDNN.Memory.((x, y, z))
     tester(hcat, (x, y, z), OneDNN.concat, ([X, Y, Z], 2))
+    tester(hcat, (x, y, z), OneDNN.concat, ((X, Y, Z), 2))
 end

@@ -5,8 +5,7 @@ using Test
 using Random
 import Statistics
 
-# for testing equivalence
-# using Flux, Zygote
+# deps
 import CEnum
 import Flux
 import ProgressMeter
@@ -21,3 +20,4 @@ include("ops/batchnorm.jl")
 include("ops/innerproduct.jl")
 include("ops/pool.jl")
 include("ops/concat.jl")
+include("ops/convolution.jl")

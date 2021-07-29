@@ -7,6 +7,18 @@
 # because the results of `dnnl_convert` are passed through the
 # `Base.cconvert` -> `Base.unsafe_convert` chain.
 macro apicall(expr)
+    # Split into a partial implementation for testing purposes.
+    expr = _apicall_partial_impl(expr)
+    return quote
+        status = $expr
+        if status != Lib.dnnl_success
+            error("DNNL Failure: $status")
+        end
+        status
+    end
+end
+
+function _apicall_partial_impl(expr)
     if expr.head != :call
         error("Only call `@apicall` on function calls")
     end
@@ -34,14 +46,7 @@ macro apicall(expr)
             args[i] = :(dnnl_convert($(esc(args[i]))))
         end
     end
-
-    return quote
-        status = $fname($(args...))
-        if status != Lib.dnnl_success
-            error("DNNL Failure: $status")
-        end
-        status
-    end
+    return :($fname($(args...)))
 end
 
 # Get to the ultimate parent.
@@ -70,6 +75,16 @@ struct Unknown <: AccessContext end
 function dnnl_arg(x, y, context::AccessContext = Reading())
     return Lib.dnnl_exec_arg_t(x, dnnl_exec_arg(y, context))
 end
+
+Base.length(::Lib.dnnl_exec_arg_t) = 1
+Base.iterate(x::Lib.dnnl_exec_arg_t, s = (x, nothing)) = s
+
+function dnnl_arg(x, y::Union{AbstractArray{<:AbstractArray}, Tuple}, context::AccessContext = Reading())
+    return map(enumerate(y)) do (i, _y)
+        Lib.dnnl_exec_arg_t(x + (i - 1), dnnl_exec_arg(_y, context))
+    end
+end
+
 function dnnl_exec_arg(y::T, context) where {T}
     return error("Define `dnnl_exec_arg` for type $(T)!")
 end
@@ -105,6 +120,7 @@ const CONTEXT_MAP = [
     "DIFF_BIAS" => _W,
     "DIFF_DST" => _R,
     "SRC" => _R,
+    "MULTIPLE_SRC" => _R,
     "WEIGHTS" => _R,
     "BIAS" => _R,
     "DST" => _W,
@@ -148,7 +164,7 @@ macro dnnl_args(syms...)
         return :(dnnl_arg(Lib.$(Symbol(dnnl_arg_enum)), $(esc(sym)), $context))
     end
 
-    return :(Arguments($(exprs...)))
+    return :(make_args($(exprs...)))
 end
 
 # In general, we want there to have a static length.
@@ -158,9 +174,27 @@ const TupleOrVector{T} = Union{NTuple{N,T},AbstractVector{T}} where {N}
 struct Arguments{T<:TupleOrVector{Lib.dnnl_exec_arg_t}}
     args::T
 end
-Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
 
+# In this path, we know all the arguments are `Lib.dnnl_exec_arg_t`, so we can just
+# construct `Arguments` directly.
+Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
 Base.length(a::Arguments) = length(a.args)
+
+# Generic path, if any of the args is a vector, then result will also be a vector.
+# Otherwise, we have tuple arguments.
+function make_args(args...)
+    return Arguments(_hasarray(args...) ? _vcat(args) : _flatcat(args...))
+end
+
+_hasarray() = false
+_hasarray(x, y...) = _hasarray(y...)
+_hasarray(x::AbstractArray, y...) = true
+
+_vcat(args) = reduce(append!, args; init = Lib.dnnl_exec_arg_t[])
+
+_flatcat(x, y...) = (x, _flatcat(y...)...)
+_flatcat(x::Tuple, y...) = (x..., _flatcat(y...)...)
+_flatcat() = ()
 
 # Note: `Base.cconvert` should return valid Julia objects and not pointers.
 # We only really use `cconvert` for the `Arguments` based types.
@@ -221,6 +255,10 @@ end
 
 function output_size(sz::NTuple{N,Int}, dims::Dims{M}) where {N,M}
     return _paddims(ntuple(i -> _output_size(dims, sz[i], i), Val(M)), sz)
+end
+
+function tuple_replace(x::NTuple{N,Int}, v, ::Val{I}) where {N,I}
+    return ntuple(i -> (i == I) ? v : x[i], Val(N))
 end
 
 #####

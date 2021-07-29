@@ -7,7 +7,7 @@
         scale_shift = OneDNN.Memory(_scale_shift)
 
         # Run the OneDNN model
-        nt = OneDNN.batchnorm_forward_training(src, scale_shift; epsilon = 1f-5)
+        nt = OneDNN.batchnorm_training(src, scale_shift; epsilon = 1f-5)
 
         # Some sanity checks.
         @test isapprox(OneDNN.materialize(nt.mean), Statistics.mean.(eachrow(_src)))
@@ -36,7 +36,7 @@
         scale_shift = OneDNN.Memory(_scale_shift)
 
         # Run the OneDNN model
-        nt = OneDNN.batchnorm_forward_training(src, scale_shift; epsilon = 1f-5)
+        nt = OneDNN.batchnorm_training(src, scale_shift; epsilon = 1f-5)
 
         # Some sanity checks.
         dims = (1, 2, 4)
@@ -71,7 +71,7 @@
         activations = [identity, Flux.relu, Flux.sigmoid, abs]
         for fn in activations
             @show fn
-            bn_onednn = OneDNN.BatchNorm(scale_shift, epsilon, fn)
+            bn_onednn = OneDNN.BatchNorm(scale_shift, fn; epsilon = epsilon)
 
             bn_flux = Flux.BatchNorm(
                 size(_src, 1), fn; affine = true, track_stats = false, ϵ = 1f-5

@@ -10,37 +10,44 @@ end
 reset!(x::CalledConvert) = (x.called = false)
 wascalled(x::CalledConvert) = x.called
 
+partial_expand(expr) = macroexpand(OneDNN, OneDNN._apicall_partial_impl(expr))
+
 @testset "Testing Utils" begin
-    # @testset "Testing @apicall" begin
-    #     # Create the correct GlobalRefs.
-    #     lib = GlobalRef(OneDNN, :Lib)
-    #     convert = GlobalRef(OneDNN, :dnnl_convert)
-    #     _convert = GlobalRef(OneDNN, :_dnnl_convert)
+    @testset "Testing @apicall" begin
+        # Create the correct GlobalRefs.
+        lib = GlobalRef(OneDNN, :Lib)
+        lib = :Lib
+        convert = :dnnl_convert
+        _convert = :_dnnl_convert
 
-    #     # Standard transformation
-    #     expr = @macroexpand OneDNN.@apicall dnnl_abc(a, b)
-    #     expected = :($lib.dnnl_abc($convert(a), $convert(b)))
-    #     @test expr == expected
+        # Standard transformation
+        esca = Expr(:escape, :a)
+        escb = Expr(:escape, :b)
+        escf = Expr(:escape, :f)
 
-    #     # Does it ignore function calls that don't start with "dnnl"?
-    #     expr = @macroexpand OneDNN.@apicall f(a, b)
-    #     expected = :(f($convert(a), $convert(b)))
-    #     @test expr == expected
+        expr = partial_expand(:(dnnl_abc(a, b)))
+        expected = :($lib.dnnl_abc($convert($esca), $convert($escb)))
+        @test expr == expected
 
-    #     # Does it correctly handle varargs
-    #     expr = @macroexpand OneDNN.@apicall f(a, b...)
-    #     expected = :(f($convert(a), $_convert(b...)...))
-    #     @test expr == expected
+        # Does it ignore function calls that don't start with "dnnl"?
+        expr = partial_expand(:(f(a, b)))
+        expected = :($escf($convert($esca), $convert($escb)))
+        @test expr == expected
 
-    #     expr = @macroexpand OneDNN.@apicall f(a...)
-    #     expected = :(f($_convert(a...)...))
-    #     @test expr == expected
+        # Does it correctly handle varargs
+        expr = partial_expand(:(f(a, b...)))
+        expected = :($escf($convert($esca), $_convert($escb...)...))
+        @test expr == expected
 
-    #     # Finally, prepend "lib"
-    #     expr = @macroexpand OneDNN.@apicall dnnl_abc(a, b...)
-    #     expected = :($lib.dnnl_abc($convert(a), $_convert(b...)...))
-    #     @test expr == expected
-    # end
+        expr = partial_expand(:(f(a...)))
+        expected = :($escf($_convert($esca...)...))
+        @test expr == expected
+
+        # Finally, prepend "lib"
+        expr = partial_expand(:(dnnl_abc(a, b...)))
+        expected = :($lib.dnnl_abc($convert($esca), $_convert($escb...)...))
+        @test expr == expected
+    end
 
     @testset "Testing Conversions" begin
         a = CalledConvert()

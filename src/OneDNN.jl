@@ -126,6 +126,10 @@ function Flux.Optimise.update!(
     return nothing
 end
 
+Zygote.accum(x::AbstractArray, y::Memory) = +(Memory(x), y)
+Zygote.accum(x::Memory, y::AbstractArray) = +(x, Memory(y))
+Zygote.accum(x::Memory, y::Memory) = +(x, y)
+
 # function update_typed!(
 #     o::Flux.Optimise.Descent,
 #     x,
