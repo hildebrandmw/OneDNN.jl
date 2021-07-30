@@ -12,19 +12,27 @@ wascalled(x::CalledConvert) = x.called
 
 partial_expand(expr) = macroexpand(OneDNN, OneDNN._apicall_partial_impl(expr))
 
+# Testing `dnnl_arg` pipeline
+mutable struct MemoryWrapper
+    ptr::OneDNN.Lib.dnnl_memory_t
+    context::OneDNN.AccessContext
+end
+MemoryWrapper() = MemoryWrapper(OneDNN.Lib.dnnl_memory_t(), OneDNN.Unknown())
+function OneDNN.dnnl_exec_arg(y::MemoryWrapper, context)
+    y.context = context
+    return y.ptr
+end
+
 @testset "Testing Utils" begin
     @testset "Testing @apicall" begin
-        # Create the correct GlobalRefs.
-        lib = GlobalRef(OneDNN, :Lib)
         lib = :Lib
         convert = :dnnl_convert
         _convert = :_dnnl_convert
-
-        # Standard transformation
         esca = Expr(:escape, :a)
         escb = Expr(:escape, :b)
         escf = Expr(:escape, :f)
 
+        # Standard Transformation
         expr = partial_expand(:(dnnl_abc(a, b)))
         expected = :($lib.dnnl_abc($convert($esca), $convert($escb)))
         @test expr == expected
@@ -47,6 +55,61 @@ partial_expand(expr) = macroexpand(OneDNN, OneDNN._apicall_partial_impl(expr))
         expr = partial_expand(:(dnnl_abc(a, b...)))
         expected = :($lib.dnnl_abc($convert($esca), $_convert($escb...)...))
         @test expr == expected
+    end
+
+    @testset "Testing Ancestor" begin
+        w = collect(1:10)
+        x = view(w, 1:4)
+        y = reshape(x, 2, 2)
+        z = view(y, :, 1)
+
+        @test OneDNN.ancestor(w) === w
+        @test OneDNN.ancestor(x) === w
+        @test OneDNN.ancestor(y) === w
+        @test OneDNN.ancestor(z) === w
+    end
+
+    @testset "Testing Arguments" begin
+        @test OneDNN.getsym(:hello) == "hello"
+        @test OneDNN.getsym(:(A.B.hello)) == "hello"
+        @test OneDNN.getsym(QuoteNode(:hello)) == "hello"
+
+        wrapper = MemoryWrapper()
+        @test wrapper.context == OneDNN.Unknown()
+        x = OneDNN.dnnl_arg(OneDNN.Lib.DNNL_ARG_SRC, wrapper)
+        @test isa(x, OneDNN.Lib.dnnl_exec_arg_t)
+        @test wrapper.context == OneDNN.Reading()
+        @test length(x) == 1
+        @test collect(x) == [x]
+
+        # Construction utilities.
+        tuple_no_array = (1,2,3,4)
+        @test OneDNN._hasarray(tuple_no_array...) == false
+        @test OneDNN._flatcat(tuple_no_array...) == (1,2,3,4)
+
+        tuple_no_array = ((1,3), 2, 3, 4)
+        @test OneDNN._hasarray(tuple_no_array...) == false
+        @test OneDNN._flatcat(tuple_no_array...) == (1,3,2,3,4)
+
+        tuple_no_array = ((1, 2), 3, (4, (5, 6), 7), 8)
+        @test OneDNN._hasarray(tuple_no_array...) == false
+        @test OneDNN._flatcat(tuple_no_array...) == (1,2,3,4,5,6,7,8)
+
+        tuple_with_array = ([1,2], 2, 3, 4)
+        @test OneDNN._hasarray(tuple_with_array...) == true
+        @test OneDNN._vcat(tuple_with_array; init = Int[]) == [1,2,2,3,4]
+
+        tuple_with_array = (1, 2, [3], 4)
+        @test OneDNN._hasarray(tuple_with_array...) == true
+        @test OneDNN._vcat(tuple_with_array; init = Int[]) == [1,2,3,4]
+
+        tuple_with_array = (1, 2, 3, [4])
+        @test OneDNN._hasarray(tuple_with_array...) == true
+        @test OneDNN._vcat(tuple_with_array; init = Int[]) == [1,2,3,4]
+
+        tuple_with_array = (1, [2], 3, [4,2])
+        @test OneDNN._hasarray(tuple_with_array...) == true
+        @test OneDNN._vcat(tuple_with_array; init = Int[]) == [1,2,3,4,2]
     end
 
     @testset "Testing Conversions" begin
@@ -73,15 +136,4 @@ partial_expand(expr) = macroexpand(OneDNN, OneDNN._apicall_partial_impl(expr))
         @test ref_equal(OneDNN.wrap_ref(y), Ref(10))
     end
 
-    @testset "Testing Ancestor" begin
-        w = collect(1:10)
-        x = view(w, 1:4)
-        y = reshape(x, 2, 2)
-        z = view(y, :, 1)
-
-        @test OneDNN.ancestor(w) === w
-        @test OneDNN.ancestor(x) === w
-        @test OneDNN.ancestor(y) === w
-        @test OneDNN.ancestor(z) === w
-    end
 end # @testset

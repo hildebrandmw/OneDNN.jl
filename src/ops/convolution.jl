@@ -1,4 +1,4 @@
-droplast(x::Tuple) = (x[1:end-1]...,)
+droplast(x::Tuple) = (x[1:(end - 1)]...,)
 
 function convolution(
     _src::Memory{T},
@@ -11,11 +11,11 @@ function convolution(
     src_md = memorydesc_ptr(_src),
     weights_md = memorydesc_ptr(_weights),
     callback = (x...) -> nothing,
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}(),
 ) where {T,N}
     dst_dims = tuple_replace(output_size(size(_src), dims), size(_weights, 4), Val(3))
     dst_md = memorydesc(T, dst_dims, dnnl_format_any())
 
-    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
     @apicall dnnl_convolution_forward_desc_init(
         opdesc,
         kind,
@@ -57,9 +57,10 @@ function convolution_backward_data(
     dims::Dims;
     forward,
     algo = Lib.dnnl_convolution_auto,
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}(),
 ) where {T}
     diff_src_md = memorydesc(T, diff_src_dims, dnnl_format_any())
-    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
+
     @apicall dnnl_convolution_backward_data_desc_init(
         opdesc,
         algo,
@@ -78,7 +79,9 @@ function convolution_backward_data(
         diff_src_md = query_md(pd, @query(diff_src))
         diff_src = similar(diff_dst, T, diff_src_dims, diff_src_md)
         execute!(p, @dnnl_args diff_src weights diff_dst)
-        return diff_src
+        # Optimization - return the reformatted `diff_dst` for use in the
+        # backward_weights kernel.
+        return (; diff_src, diff_dst)
     end
 end
 
@@ -89,12 +92,12 @@ function convolution_backward_weights(
     dims::Dims;
     forward,
     algo = Lib.dnnl_convolution_auto,
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}(),
 ) where {T,N}
     diff_bias_dims = (diff_weights_dims[N],)
     diff_weights_md = memorydesc(T, diff_weights_dims, dnnl_format_any())
     diff_bias_md = memorydesc(T, diff_bias_dims)
 
-    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
     @apicall dnnl_convolution_backward_weights_desc_init(
         opdesc,
         algo,
@@ -130,6 +133,8 @@ mutable struct Conv{W<:Memory,B<:Memory,F,N}
     dims::Dims{N}
     attributes::Attributes
     optimized_weights::Bool
+    ### Op Descriptors
+    opdesc::Base.RefValue{Lib.dnnl_convolution_desc_t}
 end
 
 function Conv(
@@ -148,16 +153,17 @@ function Conv(
     dims = Dims{2}(kernel, stride, dilation, padding)
     weights = Memory(_weights)
     bias = Memory(_bias)
+    opdesc = Ref{Lib.dnnl_convolution_desc_t}()
 
     # Create attributes for fusing the postop.
     attributes = Attributes()
     postops = PostOps()
     eltwise!(postops, activation)
     append!(attributes, postops)
-    return Conv(weights, bias, activation, dims, attributes, false)
+    return Conv(weights, bias, activation, dims, attributes, false, opdesc)
 end
 
-_slice(x::NTuple{N}) where {N} = ntuple(i -> x[(2 * i) - 1], Val(div(N,2)))
+_slice(x::NTuple{N}) where {N} = ntuple(i -> x[(2 * i) - 1], Val(div(N, 2)))
 _subone(x::NTuple{N}) where {N} = ntuple(i -> x[i] - 1, Val(N))
 
 # Note: OneDNN's convolution is Flux's CrossCor
@@ -236,6 +242,7 @@ function (conv::Conv)(_src, fuse_activation = true; kw...)
             src_md = toany(src),
             weights_md = toany(conv.weights),
             callback = weight_opt_callback,
+            conv.opdesc,
             kw...,
         )
 
@@ -244,7 +251,14 @@ function (conv::Conv)(_src, fuse_activation = true; kw...)
         return dst
     else
         return convolution(
-            src, conv.weights, conv.bias, conv.dims; attributes, src_md = toany(src), kw...
+            src,
+            conv.weights,
+            conv.bias,
+            conv.dims;
+            attributes,
+            src_md = toany(src),
+            conv.opdesc,
+            kw...,
         )
     end
 end
@@ -266,11 +280,11 @@ function rrule_fused(conv::T, src) where {T<:Conv}
         diff_dst_pre = eltwise_backward(conv.activation, diff_dst, dst)
 
         # Backprop convolution kernel
-        diff_src = convolution_backward_data(
-            src_size, conv.weights, diff_dst_pre, conv.dims; forward
+        diff_src, diff_dst_reordered = convolution_backward_data(
+            src_size, conv.weights, diff_dst_pre, conv.dims; forward, conv.opdesc
         )
         (diff_weights, diff_bias) = convolution_backward_weights(
-            size(conv.weights), src, diff_dst_pre, conv.dims; forward
+            size(conv.weights), src, diff_dst_reordered, conv.dims; forward, conv.opdesc
         )
 
         return (
@@ -291,12 +305,12 @@ function rrule_unfused(conv::T, _src) where {T<:Conv}
     function conv_pullback(_diff_dst)
         diff_dst = Memory(_diff_dst)
         diff_dst_pre = eltwise_backward(conv.activation, diff_dst, dst_pre)
-        diff_src = convolution_backward_data(
-            src_size, conv.weights, diff_dst_pre, conv.dims; forward
+        (diff_src, diff_dst_reordered) = convolution_backward_data(
+            src_size, conv.weights, diff_dst_pre, conv.dims; forward, conv.opdesc
         )
 
         (diff_weights, diff_bias) = convolution_backward_weights(
-            size(conv.weights), src, diff_dst_pre, conv.dims; forward
+            size(conv.weights), src, diff_dst_reordered, conv.dims; forward, conv.opdesc
         )
 
         return (

@@ -4,7 +4,7 @@ module OneDNN
 import LinearAlgebra
 
 # temp local teps
-import CachedArrays
+#import CachedArrays
 
 # deps
 import ChainRulesCore
@@ -129,6 +129,13 @@ end
 Zygote.accum(x::AbstractArray, y::Memory) = +(Memory(x), y)
 Zygote.accum(x::Memory, y::AbstractArray) = +(x, Memory(y))
 Zygote.accum(x::Memory, y::Memory) = +(x, y)
+
+# Special cases
+function Zygote.accum(_x::SubArray, y::Memory)
+    x = maybe_reorder(memorydesc(y), Memory(_x))
+    binary!(+, x, x, y)
+    return x
+end
 
 # function update_typed!(
 #     o::Flux.Optimise.Descent,

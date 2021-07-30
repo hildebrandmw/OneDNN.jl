@@ -337,6 +337,17 @@ function ChainRulesCore.rrule(
 end
 
 #####
+##### Reshape
+#####
+
+function Base.reshape(memory::Memory{T}, dims::NTuple{N,Int}) where {T,N}
+    md = Ref{MemoryDesc}()
+    @apicall dnnl_memory_desc_reshape(md, memory, N, Ref(reverse(dims)))
+    new_memory = MemoryPtr(parent(memory), md)
+    return Memory(parent(memory), memory.offset, dims, new_memory)
+end
+
+#####
 ##### Bridge to TiledArrays
 #####
 

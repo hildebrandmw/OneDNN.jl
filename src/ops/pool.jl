@@ -7,11 +7,11 @@ function pooling_forward(
     dims::Dims;
     kind::AbstractKind = Inference(),
     algo = Lib.dnnl_pooling_max,
+    opdesc = Ref{Lib.dnnl_pooling_v2_desc_t}()
 ) where {T,N,M}
     dst_size = output_size(size(src), dims)
     dst_md = memorydesc(T, dst_size, dnnl_format_any())
 
-    opdesc = Ref{Lib.dnnl_pooling_v2_desc_t}()
     @apicall dnnl_pooling_v2_forward_desc_init(
         opdesc,
         kind,
@@ -48,8 +48,8 @@ function pooling_backward(
     algo = Lib.dnnl_pooling_max,
     workspace::Memory,
     forward,
-) where {T,N}
     opdesc = Ref{Lib.dnnl_pooling_v2_desc_t}()
+) where {T,N}
     @apicall dnnl_pooling_v2_backward_desc_init(
         opdesc,
         algo,
@@ -81,6 +81,7 @@ const MeanExclude = Lib.dnnl_pooling_avg_exclude_padding
 
 struct Pooling{T,N}
     dims::Dims{N}
+    opdesc::Base.RefValue{Lib.dnnl_pooling_v2_desc_t}
 end
 
 # Type aliases
@@ -94,11 +95,12 @@ function Pooling{T}(
     strides = expand(Val(N), strides)
     dilation = expand(Val(N), dilation)
     padding = expand(Val(N), padding)
-    return Pooling{T,N}(Dims{N}(kernel, strides, dilation, padding))
+    opdesc = Ref{Lib.dnnl_pooling_v2_desc_t}()
+    return Pooling{T,N}(Dims{N}(kernel, strides, dilation, padding), opdesc)
 end
 
 function (pool::Pooling{T})(src::AbstractArray; kw...) where {T}
-    return pooling_forward(OneDNN.Memory(src), pool.dims; algo = T, kw...)
+    return pooling_forward(OneDNN.Memory(src), pool.dims; algo = T, pool.opdesc, kw...)
 end
 
 function ChainRulesCore.rrule(pool::Pooling{T}, _src) where {T}
@@ -110,7 +112,7 @@ function ChainRulesCore.rrule(pool::Pooling{T}, _src) where {T}
     function pooling_pullback(_diff_dst)
         diff_dst = Memory(_diff_dst)
         diff_src = pooling_backward(
-            diff_dst, src_md_any, pool.dims; algo = T, workspace, forward
+            diff_dst, src_md_any, pool.dims; algo = T, workspace, forward, pool.opdesc
         )
         return (ChainRulesCore.NoTangent(), diff_src)
     end

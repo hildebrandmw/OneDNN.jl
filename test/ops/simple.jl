@@ -31,7 +31,7 @@
         ##### Aliased Functions
         #####
 
-        fns = [abs, Flux.sigmoid, sqrt, Flux.relu]
+        fns = [abs, Flux.sigmoid, sqrt, Flux.relu, log]
         x = rand(Float32, 100, 100)
         X = OneDNN.Memory(x)
         for f in fns

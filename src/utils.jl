@@ -89,6 +89,42 @@ function dnnl_exec_arg(y::T, context) where {T}
     return error("Define `dnnl_exec_arg` for type $(T)!")
 end
 
+# In general, we want there to have a static length.
+# However, for primitives like Concat that may have many args, using a Vector makes more
+# sense.
+const TupleOrVector{T} = Union{NTuple{N,T},AbstractVector{T}} where {N}
+struct Arguments{T<:TupleOrVector{Lib.dnnl_exec_arg_t}}
+    args::T
+end
+
+# construct `Arguments` directly.
+Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
+Base.length(a::Arguments) = length(a.args)
+
+# Note: `Base.cconvert` should return valid Julia objects and not pointers.
+# We only really use `cconvert` for the `Arguments` based types.
+# Everything else needs to go through `Base.unsafe_convert` for the GC protection.
+function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:NTuple})
+    return Ref(x.args)
+end
+
+function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:AbstractVector})
+    return x.args
+end
+
+Base.resize!(x::Arguments{<:AbstractVector}, i) = resize!(x.args, i)
+Base.setindex!(x::Arguments{<:AbstractVector}, v, i::Integer) = setindex!(x.args, v, i)
+Base.getindex(x::Arguments, i) = getindex(x.args, i)
+Base.lastindex(x::Arguments) = lastindex(x.args)
+
+append(x::Arguments{<:Tuple}, arg::Lib.dnnl_exec_arg_t) = Arguments(x.args..., arg)
+append(x::Arguments{<:Tuple}, y::Arguments{<:Tuple}) = Arguments(x.args..., y.args...)
+append(x::Arguments{<:AbstractVector}, arg::Lib.dnnl_exec_arg_t) = push!(x.args, arg)
+
+#####
+##### Construction Utilities
+#####
+
 # General transformation provided by this macro:
 #
 # `@dnnl_args src dst`
@@ -96,7 +132,7 @@ end
 # becomes
 #
 # ```
-# (OneDNN).Arguments(
+# (OneDNN).make_args(
 #   (OneDNN).dnnl_arg(Lib.DNNL_ARG_SRC, src, (OneDNN).Reading()),
 #   (OneDNN).dnnl_arg(Lib.DNNL_ARG_DST, dst, (OneDNN).Writing()),
 # )
@@ -111,7 +147,7 @@ end
 # As far as I can tell, this should be pretty reliable, but we'll see.
 #
 # This requires that functions using this macro follow the same naming conventions as the
-# OneDNN C-API, but that's probably good practiced anyways.
+# OneDNN C-API, but that's probably good practice anyways.
 const _R = :(Reading())
 const _W = :(Writing())
 const CONTEXT_MAP = [
@@ -167,19 +203,6 @@ macro dnnl_args(syms...)
     return :(make_args($(exprs...)))
 end
 
-# In general, we want there to have a static length.
-# However, for primitives like Concat that may have many args, using a Vector makes more
-# sense.
-const TupleOrVector{T} = Union{NTuple{N,T},AbstractVector{T}} where {N}
-struct Arguments{T<:TupleOrVector{Lib.dnnl_exec_arg_t}}
-    args::T
-end
-
-# In this path, we know all the arguments are `Lib.dnnl_exec_arg_t`, so we can just
-# construct `Arguments` directly.
-Arguments(args::Lib.dnnl_exec_arg_t...) = Arguments(args)
-Base.length(a::Arguments) = length(a.args)
-
 # Generic path, if any of the args is a vector, then result will also be a vector.
 # Otherwise, we have tuple arguments.
 function make_args(args...)
@@ -190,31 +213,11 @@ _hasarray() = false
 _hasarray(x, y...) = _hasarray(y...)
 _hasarray(x::AbstractArray, y...) = true
 
-_vcat(args) = reduce(append!, args; init = Lib.dnnl_exec_arg_t[])
+_vcat(args; init = Lib.dnnl_exec_arg_t[]) = reduce(append!, args; init)
 
 _flatcat(x, y...) = (x, _flatcat(y...)...)
-_flatcat(x::Tuple, y...) = (x..., _flatcat(y...)...)
+_flatcat(x::Tuple, y...) = (_flatcat(x...)..., _flatcat(y...)...)
 _flatcat() = ()
-
-# Note: `Base.cconvert` should return valid Julia objects and not pointers.
-# We only really use `cconvert` for the `Arguments` based types.
-# Everything else needs to go through `Base.unsafe_convert` for the GC protection.
-function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:NTuple})
-    return Ref(x.args)
-end
-
-function Base.cconvert(::Type{Ptr{Lib.dnnl_exec_arg_t}}, x::Arguments{<:AbstractVector})
-    return x.args
-end
-
-Base.resize!(x::Arguments{<:AbstractVector}, i) = resize!(x.args, i)
-Base.setindex!(x::Arguments{<:AbstractVector}, v, i::Integer) = setindex!(x.args, v, i)
-Base.getindex(x::Arguments, i) = getindex(x.args, i)
-Base.lastindex(x::Arguments) = lastindex(x.args)
-
-append(x::Arguments{<:Tuple}, arg::Lib.dnnl_exec_arg_t) = Arguments(x.args..., arg)
-append(x::Arguments{<:Tuple}, y::Arguments{<:Tuple}) = Arguments(x.args..., y.args...)
-append(x::Arguments{<:AbstractVector}, arg::Lib.dnnl_exec_arg_t) = push!(x.args, arg)
 
 #####
 ##### Conversion Hooks

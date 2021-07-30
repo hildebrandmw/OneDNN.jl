@@ -149,7 +149,9 @@ function Base.append!(a::Attributes, p::PostOps)
 end
 
 appendsum!(p::PostOps, scale = 1) = @apicall dnnl_post_ops_append_sum(p, scale)
-function query_md(descriptor::PrimitiveDescriptor, kind, index = 0)
+function query_md(
+    descriptor::Union{PrimitiveDescriptor,Lib.dnnl_primitive_desc_t}, kind, index = 0
+)
     # TODO: Do we need to perform a null check here?
     ptr = Lib.dnnl_primitive_desc_query_md(descriptor, kind, index)
     return unsafe_load(ptr)
@@ -164,13 +166,19 @@ end
 ##### We manage our own global scratchpad here for now.
 #####
 
-SCRATCHPAD = UInt8[]
+const SCRATCHPAD = UInt8[]
+const SCRATCHPAD_MEMORY = Ref{Lib.dnnl_memory_t}()
+
+function unsafe_primitive_descriptor(primitive::Primitive)
+    _pd = Ref{Lib.dnnl_primitive_desc_t}()
+    @apicall dnnl_primitive_get_primitive_desc(primitive, _pd)
+    return _pd[]
+end
 
 function execute!(primitive::Primitive, _args; descriptor = nothing, wait = true)
     # Get the primitive descriptor if it isn't passed in alread.
     if descriptor === nothing
-        _descriptor = PrimitiveDescriptor(InnerConstructor())
-        @apicall dnnl_primitive_get_primitive_desc(primitive, _descriptor)
+        _descriptor = unsafe_primitive_descriptor(primitive)
     else
         _descriptor = decriptor
     end
@@ -181,13 +189,24 @@ function execute!(primitive::Primitive, _args; descriptor = nothing, wait = true
     if bytes > length(SCRATCHPAD)
         resize!(SCRATCHPAD, bytes)
     end
-    _memory_ptr = MemoryPtr(SCRATCHPAD, md)
-    args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, _memory_ptr))
+
+    @apicall dnnl_memory_create(SCRATCHPAD_MEMORY, md, global_engine(), pointer(SCRATCHPAD))
+    args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, SCRATCHPAD_MEMORY[]))
 
     # Finally, call the primitive
     @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
+    @apicall dnnl_memory_destroy(SCRATCHPAD_MEMORY[])
     wait && @apicall(dnnl_stream_wait(global_stream()))
     return nothing
+end
+
+function _execute!(primitive, args, scratchpad_md)
+    _memory = _MemoryPtr(SCRATCHPAD, md)
+    @time args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, _memory))
+
+    # Finally, call the primitive
+    @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
+    destroy(_memory)
 end
 
 # Automatically apply recursively to tuples.

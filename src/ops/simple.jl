@@ -120,7 +120,9 @@ end
 # Aliases
 # N.B.: Must be kept insync with tests!
 Base.identity(x::Memory) = x
-const ELTWISE_ALIASES = [:(Base.abs), :(Flux.sigmoid), :(Base.sqrt), :(Flux.relu)]
+const ELTWISE_ALIASES = [
+    :(Base.abs), :(Flux.sigmoid), :(Base.sqrt), :(Flux.relu), :(Base.log)
+]
 for op in ELTWISE_ALIASES
     @eval $op(x::Memory) = eltwise($op, x)
 end
@@ -138,6 +140,7 @@ function forward_expand(::typeof(Flux.sigmoid))
 end
 forward_expand(::typeof(Base.sqrt)) = (Lib.dnnl_eltwise_sqrt, zero(Float32), zero(Float32))
 forward_expand(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu, zero(Float32), zero(Float32))
+forward_expand(::typeof(Base.log)) = (Lib.dnnl_eltwise_log, zero(Float32), zero(Float32))
 
 # Conversion to OneDNN backward eltwise ops
 function backward_expand(::typeof(Base.abs))
@@ -152,6 +155,9 @@ function backward_expand(::typeof(Base.sqrt))
 end
 function backward_expand(::typeof(Flux.relu))
     return (Lib.dnnl_eltwise_relu_use_dst_for_bwd, zero(Float32), zero(Float32), true)
+end
+function backward_expand(::typeof(Base.log))
+    return (Lib.dnnl_eltwise_log, zero(Float32), zero(Float32), false)
 end
 
 # Can this elementwise op be fused into a previous operation?
@@ -170,11 +176,11 @@ end
 function ChainRulesCore.rrule(::typeof(eltwise), f::F, from::Memory) where {F}
     to = eltwise(f, from)
     data = dst_for_bwd(f) ? to : from
-    pullback = function eltwise_pullback(Δ)
+    function eltwise_pullback(Δ)
         diff_from = eltwise_backward(f, Δ, data)
         return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), diff_from)
     end
-    return to, pullback
+    return to, eltwise_pullback
 end
 
 #####
@@ -234,4 +240,43 @@ end
 reorder_if_any(::Ptr{MemoryDesc}, ::PrimitiveDescriptor, x::Memory, key) = x
 function reorder_if_any(md::MemoryDesc, desc::PrimitiveDescriptor, x::Memory, key)
     return isany(md) ? maybe_reorder(desc, x, key) : x
+end
+
+#####
+##### Logsoftmax
+#####
+
+function logsoftmax(src::Memory{T,N}, axis::Integer) where {T,N}
+    opdesc = Ref{Lib.dnnl_logsoftmax_desc_t}()
+    @apicall dnnl_logsoftmax_forward_desc_init(opdesc, Inference(), src, N - axis)
+
+    return temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        dst = similar(src)
+        execute!(p, @dnnl_args dst src)
+        return dst
+    end
+end
+
+function logsoftmax_backward(diff_dst::Memory{T,N}, dst::Memory{T,N}, axis::Integer) where {T,N}
+    opdesc = Ref{Lib.dnnl_logsoftmax_desc_t}()
+    @apicall dnnl_logsoftmax_backward_desc_init(opdesc, diff_dst, dst, N - axis)
+
+    return temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        diff_src = similar(diff_dst)
+        execute!(p, @dnnl_args diff_dst dst diff_src)
+        return diff_src
+    end
+end
+
+function ChainRulesCore.rrule(::typeof(logsoftmax), src::Memory, axis)
+    dst = logsoftmax(src, axis)
+    function logsoftmax_pullback(diff_dst)
+        diff_src = logsoftmax_backward(diff_dst, dst, axis)
+        return (
+            ChainRulesCore.NoTangent(),
+            diff_src,
+            ChainRulesCore.NoTangent(),
+        )
+    end
+    return dst, logsoftmax_pullback
 end

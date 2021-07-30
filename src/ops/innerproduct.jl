@@ -97,7 +97,7 @@ mutable struct Dense{W<:Memory,B<:Memory,F}
     optimized_weights::Bool
 end
 
-function Dense(weights, bias, activation)
+function Dense(weights, bias, activation::F = identity) where {F}
     weights_memory = Memory(weights)
     attributes = Attributes()
     postops = PostOps()

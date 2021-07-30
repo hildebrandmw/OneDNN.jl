@@ -8,10 +8,10 @@ function batchnorm_inference(
     scale_shift::Memory;
     epsilon = 1f-10,
     attributes = noattributes(),
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}(),
 )
-    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     @apicall dnnl_batch_normalization_forward_desc_init(
-        opdesc, Inference(), src, epsilon, batchnorm_flags(),
+        opdesc, Inference(), src, epsilon, batchnorm_flags()
     )
 
     return temp_primitive(opdesc, attributes, global_engine(), noforward()) do p, pd
@@ -27,9 +27,9 @@ function batchnorm_training(
     activation::F = identity;
     epsilon = 1f-10,
     attributes = noattributes(),
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}(),
 ) where {F<:Union{typeof(identity),typeof(Flux.relu)}}
     flags = batchnorm_flags(activation)
-    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     @apicall dnnl_batch_normalization_forward_desc_init(
         opdesc, Training(), src, epsilon, flags
     )
@@ -61,9 +61,9 @@ function batchnorm_backward(
     epsilon = 1f-10,
     attributes = noattributes(),
     workspace = nothing,
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}(),
 )
     flags = (workspace === nothing) ? batchnorm_flags(identity) : batchnorm_flags(Flux.relu)
-    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
     src = maybe_reorder(memorydesc(diff_dst), src)
 
     @apicall dnnl_batch_normalization_backward_desc_init(
@@ -92,6 +92,7 @@ struct BatchNorm{T<:OneDNN.Memory,F}
     activation::F
     epsilon::Float32
     attributes::Attributes
+    opdesc::Base.RefValue{Lib.dnnl_batch_normalization_desc_t}
 end
 
 function BatchNorm(scale_shift::AbstractMatrix, activation = identity; epsilon = 1f-5)
@@ -99,11 +100,14 @@ function BatchNorm(scale_shift::AbstractMatrix, activation = identity; epsilon =
     postops = PostOps()
     eltwise!(postops, activation)
     append!(attributes, postops)
-    return BatchNorm(OneDNN.Memory(scale_shift), activation, epsilon, attributes)
+    opdesc = Ref{Lib.dnnl_batch_normalization_desc_t}()
+    return BatchNorm(OneDNN.Memory(scale_shift), activation, epsilon, attributes, opdesc)
 end
 
 function (bn::BatchNorm)(x)
-    return batchnorm_inference(Memory(x), bn.scale_shift; bn.epsilon, bn.attributes)
+    return batchnorm_inference(
+        Memory(x), bn.scale_shift; bn.epsilon, bn.attributes, bn.opdesc
+    )
 end
 
 function set_scale_shift!(x::AbstractArray{T,2}) where {T}
@@ -126,7 +130,7 @@ function ChainRulesCore.rrule(bn::BatchNorm, src::Memory)
 end
 
 function batchnorm_rrule_fused(bn::BatchNorm, src::Memory)
-    nt = batchnorm_training(src, bn.scale_shift, bn.activation; bn.epsilon)
+    nt = batchnorm_training(src, bn.scale_shift, bn.activation; bn.epsilon, bn.opdesc)
 
     function batchnorm_fused_pullback(diff_data::Memory)
         Δ = batchnorm_backward(
@@ -138,6 +142,7 @@ function batchnorm_rrule_fused(bn::BatchNorm, src::Memory)
             nt.forward,
             bn.epsilon,
             nt.workspace,
+            bn.opdesc,
         )
         return ((; scale_shift = Δ.diff_scale_shift), Δ.diff_src)
     end
