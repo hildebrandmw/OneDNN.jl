@@ -139,12 +139,6 @@ getbytes(a::MaybeRef{MemoryDesc}) = signed(Lib.dnnl_memory_desc_get_size(wrap_re
 ##### Memory
 #####
 
-# # Bridge into TiledArrays
-# vlayout(x) = Val(layout(x))
-# layout(::Val{N}) where {N} = ntuple(identity, Val(N))
-# layout(::Array{T,N}) where {T,N} = layout(Val(N))
-# layout(x::LinearAlgebra.Transpose) = reverse(layout(parent(x)))
-
 # Often, we don't want to specialize on the layout of the array, instead allowing oneDNN
 # to work on its own
 struct Memory{T,N,A<:AbstractArray{T}} <: AbstractArray{T,N}

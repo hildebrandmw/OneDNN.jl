@@ -1,5 +1,5 @@
 onednn_url = "https://github.com/oneapi-src/OneDNN"
-onednn_tag = "v2.3"
+onednn_tag = "v2.3.2"
 install_dir = joinpath(@__DIR__, "dnnl")
 
 onednn_src = joinpath(@__DIR__, "oneDNN")
