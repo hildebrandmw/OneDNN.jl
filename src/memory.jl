@@ -127,6 +127,8 @@ function memorydesc(
 end
 
 toany(a::MemoryDesc) = memorydesc(a.data_type, logicalsize(a), dnnl_format_any())
+
+isany(a::Ptr{MemoryDesc}) = isany(unsafe_load(a))
 isany(a::MemoryDesc) = a.format_kind == Lib.dnnl_format_kind_any
 
 function Base.:(==)(a::MaybeRef{MemoryDesc}, b::MaybeRef{MemoryDesc})
@@ -163,6 +165,7 @@ function Base.convert(::Type{Memory{T,N,A}}, x::Memory{T,N,B}) where {T,N,A,B}
     return Memory(convert(A, x.array), x.offset, x.logicalsize, x.memory)
 end
 
+Base.sizeof(x::Memory) = getbytes(memorydesc_ptr(x))
 toany(x::Memory) = toany(memorydesc(x))
 
 logicalsize(x::Memory) = size(x)
@@ -276,11 +279,11 @@ end
 #####
 
 function Base.similar(
-    x::Memory{<:Any,M},
+    x::Memory{U,M},
     ::Type{T} = eltype(x),
     dims::NTuple{N,Int} = size(x),
-    desc::MemoryDesc = (M == N) ? memorydesc(x) : memorydesc(T, dims),
-) where {T,M,N}
+    desc::MemoryDesc = (M == N && U === T) ? memorydesc(x) : memorydesc(T, dims),
+) where {U,T,M,N}
     # Number of bytes to allocate.
     # Since OneDNN is free to reorder and pad, we need to explicitly ask it.
     bytes = getbytes(desc)

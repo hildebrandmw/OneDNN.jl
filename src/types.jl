@@ -180,7 +180,7 @@ function execute!(primitive::Primitive, _args; descriptor = nothing, wait = true
     if descriptor === nothing
         _descriptor = unsafe_primitive_descriptor(primitive)
     else
-        _descriptor = decriptor
+        _descriptor = descriptor
     end
 
     # Create a scratchpad

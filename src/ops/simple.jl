@@ -28,10 +28,24 @@ function ChainRulesCore.rrule(
     ::typeof(reorder), desc::MemoryDesc, from::Memory, format = Opaque
 )
     to = reorder(desc, from, format)
-    pullback = function reorder_pullback(Δ)
+    function reorder_pullback(Δ)
         return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ, ChainRules.NoTangent())
     end
-    return to, pullback
+    return to, reorder_pullback
+end
+
+toeltype(::Type{T}, from::OneDNN.Memory{T}) where {T} = from
+function toeltype(::Type{T}, from::OneDNN.Memory) where {T}
+    to = similar(from, T)
+    return reorder!(to, from)
+end
+
+function ChainRulesCore.rrule(::typeof(toeltype), ::Type{T}, from::OneDNN.Memory{U}) where {T,U}
+    to = toeltype(T, from)
+    function toeltype_pullback(Δ)
+        return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), toeltype(U, Δ))
+    end
+    return to, toeltype_pullback
 end
 
 #####
@@ -177,7 +191,7 @@ function ChainRulesCore.rrule(::typeof(eltwise), f::F, from::Memory) where {F}
     to = eltwise(f, from)
     data = dst_for_bwd(f) ? to : from
     function eltwise_pullback(Δ)
-        diff_from = eltwise_backward(f, Δ, data)
+        diff_from = eltwise_backward(f, Memory(Δ), data)
         return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), diff_from)
     end
     return to, eltwise_pullback

@@ -2,6 +2,7 @@ module OneDNN
 
 # stdlib
 import LinearAlgebra
+import Random
 
 # temp local teps
 #import CachedArrays
@@ -27,6 +28,7 @@ include("utils.jl")
 include("types.jl")
 include("tiled.jl")
 include("memory.jl")
+include("bf16.jl")
 
 # ops
 include("ops/simple.jl")
@@ -91,40 +93,74 @@ global_stream() = GLOBAL_STREAM[]
 # # TODO: Turns out that updating is better parallelized across the layer dimension than the
 # # within each parameter itself
 function Flux.Optimise.update!(
-    o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{T,N}
-) where {T,N}
+    o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{U,N}
+) where {T,U,N}
     # Make sure both objects have the same memory layout.
-    mx = memorydesc(x)
-    mΔ = memorydesc(Δ)
-    if mx != mΔ
-        error("Incompatible memory formats!")
-        # # Enter the realm of the type unstable!
-        # sz = logicalsize(mx, Val(N))
-        # indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
-        # indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
-        #     logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
-        # )
-        # update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
-        # return nothing
-    end
+    # TODO: Handle different types correctly.
+    # mx = memorydesc(x)
+    # mΔ = memorydesc(Δ)
+    # if mx != mΔ
+    #     error("Incompatible memory formats!")
+    #     # # Enter the realm of the type unstable!
+    #     # sz = logicalsize(mx, Val(N))
+    #     # indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
+    #     # indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
+    #     #     logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
+    #     # )
+    #     # update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
+    #     # return nothing
+    # end
 
+    eta = convert(Float32, o.eta)
     xa = vec(parent(x))
     Δa = vec(parent(Δ))
-    xa .= xa .- (o.eta .* Δa)
+    xa .-= (eta .* Δa)
     return nothing
 end
 
 function Flux.Optimise.update!(
-    o::Flux.Optimise.Descent, x::Memory{T,N}, ix, y::Memory{T,N}, iy
-) where {T,N}
+    o::Flux.Optimise.Descent, x::Memory{T,N}, ix, y::Memory{U,N}, iy
+) where {T,U,N}
     px = parent(x)
     py = parent(y)
-    eta = convert(T, o.eta)
+    eta = convert(Float32, o.eta)
     for i in eachindex(ix, iy)
         @inbounds(px[ix[i]] -= eta * py[iy[i]])
     end
     return nothing
 end
+
+#####
+##### Mirrored
+#####
+
+function Flux.Optimise.update!(
+    o::Flux.Optimise.Descent, x::Mirrored, Δ::Memory{T,N}
+) where {T,N}
+    eta = convert(Float32, o.eta)
+    px = parent(x)
+    pΔ = parent(Δ)
+    for i in eachindex(pΔ)
+        @inbounds px[i] -= eta * pΔ[i]
+    end
+    return nothing
+end
+
+function Flux.Optimise.update!(
+    o::Flux.Optimise.Descent, x::Mirrored, ix, y::Memory{T,N}, iy
+) where {T,N}
+    px = parent(x)
+    py = parent(y)
+    eta = convert(Float32, o.eta)
+    for i in eachindex(ix, iy)
+        @inbounds(px[ix[i]] -= eta * py[iy[i]])
+    end
+    return nothing
+end
+
+#####
+##### Zygote Compat
+#####
 
 Zygote.accum(x::AbstractArray, y::Memory) = +(Memory(x), y)
 Zygote.accum(x::Memory, y::AbstractArray) = +(x, Memory(y))

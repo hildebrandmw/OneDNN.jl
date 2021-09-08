@@ -1,7 +1,10 @@
+_maybepromote(::Type{T}) where {T} = T
+_maybepromote(::Type{T}) where {T <: AbstractFloat} = Float32
+
 function innerproduct(
     _src::Memory{T},
-    _weights::Memory,
-    bias::Memory;
+    _weights::Memory{T},
+    bias::Memory{T};
     kind = Inference(),
     attributes::Attributes = noattributes(),
     # Allow for callers to maybe convert these descriptions to "any", allowing callers
@@ -9,9 +12,11 @@ function innerproduct(
     src_md = memorydesc_ptr(_src),
     weights_md = memorydesc_ptr(_weights),
     callback = (x...) -> nothing,
-) where {T}
+    output_eltype::Type{D} = T
+) where {T,D}
+    #@show (size(_src), size(_weights), size(bias))
     dst_dims = (size(bias, 1), size(_src, 2))
-    dst_md = memorydesc(T, dst_dims, dnnl_format_any())
+    dst_md = memorydesc(D, dst_dims, dnnl_format_any())
     opdesc = Ref{Lib.dnnl_inner_product_desc_t}()
 
     @apicall dnnl_inner_product_forward_desc_init(
@@ -28,10 +33,10 @@ function innerproduct(
 
         # Materialize destinations
         dst_md = query_md(pd, @query(dst))
-        dst = similar(src, T, dst_dims, dst_md)
+        dst = similar(src, D, dst_dims, dst_md)
 
         # Execute primitive
-        execute!(p, @dnnl_args src weights bias dst)
+        execute!(p, @dnnl_args src weights bias dst; descriptor = pd)
         return dst
     end
 end
@@ -61,22 +66,23 @@ function innerproduct_backward_weights(
     diff_weights_dims::NTuple, _src::Memory{T}, _diff_dst::Memory
 ) where {T}
     diff_bias_dims = (diff_weights_dims[2],)
-    diff_weights_md = memorydesc(T, diff_weights_dims, dnnl_format_any())
-    diff_bias_md = memorydesc(T, diff_bias_dims)
+    diff_weights_md = memorydesc(_maybepromote(T), diff_weights_dims, dnnl_format_any())
+    diff_bias_md = memorydesc(_maybepromote(T), diff_bias_dims)
     opdesc = Ref{Lib.dnnl_inner_product_desc_t}()
     @apicall dnnl_inner_product_backward_weights_desc_init(
         opdesc, toany(_src), diff_weights_md, diff_bias_md, toany(_diff_dst)
     )
 
     return temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, pd
+        #@show (diff_weights_dims, size(_src), size(_diff_dst))
         # Maybe convert arguments
         src = maybe_reorder(pd, _src, @query(src))
         diff_dst = maybe_reorder(pd, _diff_dst, @query(diff_dst))
 
         # Materialize destinations
         diff_weights_md = query_md(pd, @query(diff_weights))
-        diff_weights = similar(diff_dst, T, diff_weights_dims, diff_weights_md)
-        diff_bias = similar(diff_dst, T, diff_bias_dims, diff_bias_md)
+        diff_weights = similar(diff_dst, _maybepromote(T), diff_weights_dims, diff_weights_md)
+        diff_bias = similar(diff_dst, _maybepromote(T), diff_bias_dims, diff_bias_md)
 
         # Execute and return
         execute!(p, @dnnl_args diff_weights diff_bias src diff_dst)
@@ -88,30 +94,38 @@ end
 ##### Dense Layer
 #####
 
-mutable struct Dense{W<:Memory,B<:Memory,F}
+mutable struct Dense{W<:Memory,B<:Memory,F,T}
     weights::W
     bias::B
     activation::F
     attributes::Attributes
     # Memory format optimization
     optimized_weights::Bool
+    output_eltype::Type{T}
 end
 
-function Dense(weights, bias, activation::F = identity) where {F}
+output_eltype(::Dense{W,B,F,T}) where {W,B,F,T} = T
+
+function Dense(
+    weights::AbstractMatrix{T},
+    bias::AbstractVector{T},
+    activation::F = identity,
+    output_eltype::Type{U} = T
+) where {T,F,U}
     weights_memory = Memory(weights)
     attributes = Attributes()
     postops = PostOps()
     eltwise!(postops, activation)
     append!(attributes, postops)
 
-    return Dense(Memory(weights), Memory(bias), activation, attributes, false)
+    return Dense(Memory(weights), Memory(bias), activation, attributes, false, output_eltype)
 end
 Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m.bias), m.σ)
 
 Flux.@functor Dense (weights, bias)
 
-function (dense::Dense)(_src, fuse_activation = true)
-    src = Memory(_src)
+function (dense::Dense{<:OneDNN.Memory{T}})(_src, fuse_activation = true) where {T}
+    src = toeltype(T, Memory(_src))
     attributes = fuse_activation ? dense.attributes : noattributes()
 
     if dense.optimized_weights == false
@@ -129,6 +143,7 @@ function (dense::Dense)(_src, fuse_activation = true)
             src_md = toany(src),
             weights_md = toany(dense.weights),
             callback = weight_opt_callback,
+            output_eltype = output_eltype(dense),
         )
 
         dense.weights = maybe_reorder(optimized_weights_desc[], dense.weights)
@@ -136,12 +151,20 @@ function (dense::Dense)(_src, fuse_activation = true)
         return dst
     else
         return innerproduct(
-            src, dense.weights, dense.bias; attributes = attributes, src_md = toany(src)
+            src,
+            dense.weights,
+            dense.bias;
+            attributes = attributes,
+            src_md = toany(src),
+            output_eltype = output_eltype(dense),
         )
     end
 end
 
-function ChainRulesCore.rrule(dense::Dense, src::AbstractMatrix, fuse_activation::Bool)
+function ChainRulesCore.rrule(
+    dense::Dense{<:OneDNN.Memory{T}}, _src::AbstractMatrix{U}, fuse_activation::Bool
+) where {T,U}
+    src = toeltype(T, Memory(_src))
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
     return if canfuse(dense.activation)
         rrule_fused(dense, src, true)
@@ -150,24 +173,23 @@ function ChainRulesCore.rrule(dense::Dense, src::AbstractMatrix, fuse_activation
     end
 end
 
-function rrule_fused(dense::T, _src, _fuse_activation) where {T<:Dense}
+function rrule_fused(dense::Dense{<:OneDNN.Memory{T}}, _src, _fuse_activation) where {T}
     src = Memory(_src)
     src_size = size(src)
     dst = dense(src, true)
     function dense_fused_pullback(_diff_dst)
         # Maybe convert argument
-        diff_dst = Memory(_diff_dst)
+        diff_dst = toeltype(eltype(dst), Memory(_diff_dst))
         # Reverse activation function.
-        diff_dst_pre = eltwise_backward(dense.activation, diff_dst, dst)
+        diff_dst_pre = toeltype(T, eltwise_backward(dense.activation, diff_dst, dst))
 
         # Backprop innerproduct kernel
         diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
         (diff_weights, diff_bias) = innerproduct_backward_weights(
             size(dense.weights), src, diff_dst_pre
         )
-
         return (
-            ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
+            ChainRulesCore.Tangent{typeof(dense)}(; weights = diff_weights, bias = diff_bias),
             diff_src,
             ChainRulesCore.NoTangent(),
         )

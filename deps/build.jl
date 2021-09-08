@@ -16,19 +16,21 @@ end
 patchdir = joinpath(@__DIR__, "patches")
 patchfile = joinpath(patchdir, "onednn.patch")
 cd(onednn_src)
-try
-    run(`git apply $patchfile`)
-catch e
-    isa(e, ProcessFailedException) || rethrow(e)
-end
+# try
+#     run(`git apply $patchfile`)
+# catch e
+#     isa(e, ProcessFailedException) || rethrow(e)
+# end
 
 # Run cmake
+cc = "clang"
+cxx = "clang++"
 cmake_args = [
     "-DCMAKE_BUILD_TYPE=Release",
     "-DCMAKE_INSTALL_PREFIX=$(install_dir)",
     "-DDNNL_LIBRARY_TYPE=SHARED",
-    "-DCMAKE_CXX_COMPILER=icc",
-    "-DCMAKE_C_COMPILER=icc",
+    "-DCMAKE_CXX_COMPILER=$cc",
+    "-DCMAKE_C_COMPILER=$cc",
     "-DDNNL_BUILD_TESTS=OFF",
     "-DDNNL_BUILD_EXAMPLES=OFF",
     "-DDNNL_CPU_RUNTIME=THREADPOOL",
