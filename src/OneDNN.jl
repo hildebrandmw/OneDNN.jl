@@ -14,6 +14,11 @@ import MacroTools
 import Polyester
 import UnPack: @unpack
 import Zygote
+import ZygoteRules: ZygoteRules, _pullback, AContext, literal_getproperty, literal_getfield
+
+function pullback_for_default_literal_getproperty(cx::AContext, x, ::Val{f}) where {f}
+    return _pullback(cx, literal_getfield, x, Val{f}())
+end
 
 #####
 ##### deps

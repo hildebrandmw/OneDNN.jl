@@ -26,6 +26,8 @@
         @test isa(Y, OneDNN.Memory)
         @test isapprox(y, OneDNN.materialize(Y))
         @inferred Zygote._pullback(M, X)
+        out, back = Zygote._pullback(M, X)
+        @inferred back(out)
 
         dy = Float32(0.125) * randn(Float32, size(y))
         DY = OneDNN.Memory(dy)
