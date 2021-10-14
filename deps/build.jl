@@ -17,11 +17,11 @@ patchdir = joinpath(@__DIR__, "patches")
 patchfile = joinpath(patchdir, "onednn.patch")
 cd(onednn_src)
 
-try
-    run(`git apply $patchfile`)
-catch e
-    isa(e, ProcessFailedException) || rethrow(e)
-end
+# try
+#     run(`git apply $patchfile`)
+# catch e
+#     isa(e, ProcessFailedException) || rethrow(e)
+# end
 
 # Run cmake
 cc = "clang"

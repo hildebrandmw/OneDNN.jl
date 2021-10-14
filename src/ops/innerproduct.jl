@@ -186,11 +186,10 @@ function rrule_fused(dense::Dense{<:OneDNN.Memory{T}}, _src, _fuse_activation) w
         diff_dst_pre = toeltype(T, eltwise_backward(dense.activation, diff_dst, dst))
 
         # Backprop innerproduct kernel
-        @time diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
-        @time (diff_weights, diff_bias) = innerproduct_backward_weights(
+        diff_src = innerproduct_backward_data(src_size, dense.weights, diff_dst_pre)
+        (diff_weights, diff_bias) = innerproduct_backward_weights(
             size(dense.weights), src, diff_dst_pre
         )
-        println()
         return (
             ChainRulesCore.Tangent{typeof(dense)}(;
                 weights = diff_weights, bias = diff_bias
