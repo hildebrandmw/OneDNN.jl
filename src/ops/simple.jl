@@ -26,11 +26,21 @@ end
 # Pullback is simply the identity.
 # Let downstream kernels decide if they want to reorder the sensitivities.
 function ChainRulesCore.rrule(
+    ::typeof(reorder), from::Memory
+)
+    to = reorder(from)
+    function reorder_pullback(Δ)
+        return (ChainRulesCore.NoTangent(), Δ)
+    end
+    return to, reorder_pullback
+end
+
+function ChainRulesCore.rrule(
     ::typeof(reorder), desc::MemoryDesc, from::Memory
 )
     to = reorder(desc, from)
     function reorder_pullback(Δ)
-        return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ)
+        return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), Δ)
     end
     return to, reorder_pullback
 end
