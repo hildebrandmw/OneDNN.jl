@@ -26,7 +26,7 @@ end
 # Pullback is simply the identity.
 # Let downstream kernels decide if they want to reorder the sensitivities.
 function ChainRulesCore.rrule(
-    ::typeof(reorder), desc::MemoryDesc, from::Memory, format = Opaque
+    ::typeof(reorder), desc::MemoryDesc, from::Memory
 )
     to = reorder(desc, from, format)
     function reorder_pullback(Δ)
