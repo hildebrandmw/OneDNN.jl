@@ -28,7 +28,7 @@ end
 function ChainRulesCore.rrule(
     ::typeof(reorder), desc::MemoryDesc, from::Memory
 )
-    to = reorder(desc, from, format)
+    to = reorder(desc, from)
     function reorder_pullback(Δ)
         return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ, ChainRules.NoTangent())
     end
