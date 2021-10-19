@@ -30,7 +30,7 @@ function ChainRulesCore.rrule(
 )
     to = reorder(desc, from)
     function reorder_pullback(Δ)
-        return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ, ChainRules.NoTangent())
+        return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ)
     end
     return to, reorder_pullback
 end
