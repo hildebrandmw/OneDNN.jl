@@ -2,6 +2,7 @@
 ##### Reorder
 #####
 
+reorder(from::Memory{T}) where {T} = reorder(memorydesc(T, size(from)), from)
 function reorder(md::MemoryDesc, from::Memory)
     to = similar(from, eltype(from), size(from), md)
     reorder!(to, from)
