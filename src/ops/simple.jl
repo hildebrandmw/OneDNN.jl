@@ -2,6 +2,7 @@
 ##### Reorder
 #####
 
+reorder(from::Memory{T}) where {T} = reorder(memorydesc(T, size(from)), from)
 function reorder(md::MemoryDesc, from::Memory)
     to = similar(from, eltype(from), size(from), md)
     reorder!(to, from)
@@ -25,11 +26,21 @@ end
 # Pullback is simply the identity.
 # Let downstream kernels decide if they want to reorder the sensitivities.
 function ChainRulesCore.rrule(
-    ::typeof(reorder), desc::MemoryDesc, from::Memory, format = Opaque
+    ::typeof(reorder), from::Memory
 )
-    to = reorder(desc, from, format)
+    to = reorder(from)
     function reorder_pullback(Δ)
-        return (ChainRules.NoTangent(), ChainRules.NoTangent(), Δ, ChainRules.NoTangent())
+        return (ChainRulesCore.NoTangent(), Δ)
+    end
+    return to, reorder_pullback
+end
+
+function ChainRulesCore.rrule(
+    ::typeof(reorder), desc::MemoryDesc, from::Memory
+)
+    to = reorder(desc, from)
+    function reorder_pullback(Δ)
+        return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), Δ)
     end
     return to, reorder_pullback
 end
