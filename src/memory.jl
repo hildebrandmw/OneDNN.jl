@@ -53,7 +53,7 @@ function Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::MemoryDesc)
 end
 
 # Specialize on typed dimensions to make typestable
-logicalsize(md::MemoryDesc) = reverse(md.dims[1:(md.ndims)])
+logicalsize(md::MemoryDesc) = reverse(md.dims[1:min(12, md.ndims)])
 logicalsize(md::MemoryDesc, v::Val) = reverse(ntuple(i -> md.dims[i], v))
 function Base.strides(md::MemoryDesc, v::Val)
     return reverse(ntuple(i -> md.format_desc.strides[i], v))
@@ -81,7 +81,7 @@ function Base.show(io::IO, md::MemoryDesc)
     if format_kind == Lib.dnnl_blocked
         #blocking_desc = md.format_desc.blocking
         blocking_desc = md.format_desc
-        num_inner_blocks = blocking_desc.inner_nblks
+        num_inner_blocks = min(12, blocking_desc.inner_nblks)
         extra_format = """
                 strides: $(blocking_desc.strides[1:ndims])
                 num inner blocks: $(num_inner_blocks)

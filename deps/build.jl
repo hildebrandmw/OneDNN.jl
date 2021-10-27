@@ -14,8 +14,15 @@ end
 
 # Apply performance patch.
 patchdir = joinpath(@__DIR__, "patches")
-patchfile = joinpath(patchdir, "onednn.patch")
+patchfile = joinpath(patchdir, "cnn.patch")
 cd(onednn_src)
+
+run(`git apply $patchfile`)
+# try
+#     run(`git apply $patchfile`)
+# catch e
+#     isa(e, ProcessFailedException) || rethrow(e)
+# end
 
 # Run cmake
 cc = "clang"
