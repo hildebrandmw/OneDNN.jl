@@ -67,7 +67,9 @@ Base.ndims(md::MemoryDesc) = md.ndims
 function Base.show(io::IO, md::MemoryDesc)
     @nospecialize
 
-    ndims = md.ndims
+    # Perform the "min" check to handle corner cases where the memory layout is too exotic
+    # for this simple showing method.
+    ndims = min(md.ndims, 12)
     size = logicalsize(md)
     data_type = md.data_type
     padded_dims = reverse(md.padded_dims[1:ndims])

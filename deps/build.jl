@@ -1,5 +1,5 @@
 onednn_url = "https://github.com/oneapi-src/OneDNN"
-onednn_tag = "v2.3.2"
+onednn_tag = "v2.4.2"
 install_dir = joinpath(@__DIR__, "dnnl")
 
 onednn_src = joinpath(@__DIR__, "oneDNN")
@@ -16,12 +16,6 @@ end
 patchdir = joinpath(@__DIR__, "patches")
 patchfile = joinpath(patchdir, "onednn.patch")
 cd(onednn_src)
-
-# try
-#     run(`git apply $patchfile`)
-# catch e
-#     isa(e, ProcessFailedException) || rethrow(e)
-# end
 
 # Run cmake
 cc = "clang"
