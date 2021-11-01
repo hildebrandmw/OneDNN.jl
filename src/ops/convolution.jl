@@ -181,46 +181,8 @@ function Conv(m::Flux.CrossCor)
     )
 end
 
-# function Conv(
-#     k::NTuple{N,Integer},
-#     ch::Pair{Int32,Int32},
-#     σ = identity;
-#     init = glorot_uniform,
-#     stride = 1,
-#     padding = 0,
-#     dilation = 1,
-#     groups = 1,
-#     weight = Flux.convfilter(k, (ch[1] + groups => ch[2]); init),
-#     bias = true,
-# ) where {N}
-#     ## Using Flux to build weight filter. As they use the WHCN format, we need to change format so
-#     ## NCHW
-#     w_dims = length(size(_weights))
-#     if w_dims > 3
-#         weight = PermutedDimsArray(weight, (4, 3, 2, 1))
-#     else
-#         weight = PermutedDimsArray(weight, (3, 2, 1))
-#     end
-#     return Conv(weight, bias, σ; stride, padding, dilation, groups)
-# end
-#
-# function Conv(m::Flux.Conv)
-#     ## Filter weight dimensions include the input and output channels. This means that for
-#     ## single dimension filters, we will have a maximum of 3 dimensions. Only in this instance,
-#     ## do we not want to take the transpose.
-#     weight = m.weight
-#     w_dims = length(size(weight))
-#     if w_dims > 3
-#         weight = PermutedDimsArray(m.weight, (2, 1, 3, 4))
-#     end
-#
-#     return Conv(OneDNN.Memory(weight), OneDNN.Memory(m.bias), m.σ)
-# end
-
-## Apparently, this specifies what to collect from training???
 Flux.@functor Conv (weights, bias)
 
-## This notation is a functor (adds functionality to struct
 function (conv::Conv)(_src, fuse_activation = true; kw...)
     src = Memory(_src)
     attributes = fuse_activation ? conv.attributes : noattributes()
