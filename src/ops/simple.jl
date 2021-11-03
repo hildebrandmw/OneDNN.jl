@@ -194,7 +194,8 @@ canfuse(::typeof(identity)) = true
 # Forward backprop definition to the main entry point.
 for op in ELTWISE_ALIASES
     @eval function ChainRulesCore.rrule(::typeof($op), x::Memory)
-        return ChainRulesCore.rrule(eltwise, $op, x)
+        y, pullback = ChainRulesCore.rrule(eltwise, $op, x)
+        return y, dy -> Base.tail(pullback(dy))
     end
 end
 

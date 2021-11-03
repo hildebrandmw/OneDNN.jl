@@ -1,5 +1,8 @@
 module OneDNN
 
+export Memory
+export Conv, BatchNorm, Pooling
+
 # stdlib
 import LinearAlgebra
 import Random
