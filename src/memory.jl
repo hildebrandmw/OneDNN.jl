@@ -203,6 +203,11 @@ end
 
 Base.cconvert(::Type{Ptr{Lib.dnnl_memory_desc_t}}, x::Memory) = memorydesc_ptr(x)
 
+Base.elsize(::Type{<:Memory{T}}) where {T} = sizeof(T)
+function Base.unsafe_convert(::Type{Ptr{T}}, x::Memory{T}) where {T}
+    return pointer(x.array)
+end
+
 # For constructing DNNL arguments.
 function dnnl_exec_arg(x::Memory, context::AccessContext = Reading())
     setptr!(x, context)

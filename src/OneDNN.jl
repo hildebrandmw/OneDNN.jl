@@ -8,7 +8,7 @@ import LinearAlgebra
 import Random
 
 # temp local teps
-#import CachedArrays
+import CachedArrays
 
 # deps
 import ChainRulesCore
@@ -22,6 +22,8 @@ import ZygoteRules: ZygoteRules, _pullback, AContext, literal_getproperty, liter
 function pullback_for_default_literal_getproperty(cx::AContext, x, ::Val{f}) where {f}
     return _pullback(cx, literal_getfield, x, Val{f}())
 end
+
+const SIMILAR_FOR_SCRATCHPAD = false
 
 #####
 ##### deps

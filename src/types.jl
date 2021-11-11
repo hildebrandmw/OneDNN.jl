@@ -175,7 +175,17 @@ function unsafe_primitive_descriptor(primitive::Primitive)
     return _pd[]
 end
 
-function execute!(primitive::Primitive, _args; descriptor = nothing, wait = true)
+function execute!(primitive::Primitive, args::Tuple{<:AbstractArray,<:Arguments}; kw...)
+    return execute!(primitive, args[2]; scratchpad_source = args[1], kw...)
+end
+
+function execute!(
+    primitive::Primitive,
+    _args;
+    scratchpad_source = nothing,
+    descriptor = nothing,
+    wait = true,
+)
     # Get the primitive descriptor if it isn't passed in alread.
     if descriptor === nothing
         _descriptor = unsafe_primitive_descriptor(primitive)
@@ -186,17 +196,30 @@ function execute!(primitive::Primitive, _args; descriptor = nothing, wait = true
     # Create a scratchpad
     md = query_md(_descriptor, Lib.dnnl_query_scratchpad_md)
     bytes = getbytes(md)
-    if bytes > length(SCRATCHPAD)
+
+    if scratchpad_source === nothing && bytes > length(SCRATCHPAD)
         resize!(SCRATCHPAD, bytes)
     end
 
-    @apicall dnnl_memory_create(SCRATCHPAD_MEMORY, md, global_engine(), pointer(SCRATCHPAD))
-    args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, SCRATCHPAD_MEMORY[]))
+    if scratchpad_source === nothing
+        scratchpad = SCRATCHPAD
+    else
+        scratchpad = similar(scratchpad_source, UInt8, bytes)
+    end
 
-    # Finally, call the primitive
-    @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
-    @apicall dnnl_memory_destroy(SCRATCHPAD_MEMORY[])
-    wait && @apicall(dnnl_stream_wait(global_stream()))
+    GC.@preserve scratchpad begin
+        @apicall dnnl_memory_create(
+            SCRATCHPAD_MEMORY, md, global_engine(), pointer(scratchpad)
+        )
+        args = append(
+            _args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, SCRATCHPAD_MEMORY[])
+        )
+
+        # Finally, call the primitive
+        @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
+        @apicall dnnl_memory_destroy(SCRATCHPAD_MEMORY[])
+        wait && @apicall(dnnl_stream_wait(global_stream()))
+    end
     return nothing
 end
 
@@ -206,7 +229,7 @@ function _execute!(primitive, args, scratchpad_md)
 
     # Finally, call the primitive
     @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
-    destroy(_memory)
+    return destroy(_memory)
 end
 
 # Automatically apply recursively to tuples.

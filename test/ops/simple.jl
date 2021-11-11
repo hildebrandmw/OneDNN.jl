@@ -54,7 +54,7 @@
             # Make sure the alias rules work as well.
             YY, back_result_2 = Zygote._pullback(f, X)
             @test isapprox(OneDNN.materialize(YY), y)
-            dXX = back_result_2(dY)[3]
+            dXX = back_result_2(dY)[2]
             @test isapprox(dx, OneDNN.materialize(dXX))
             @inferred back_result_2(dY)
         end

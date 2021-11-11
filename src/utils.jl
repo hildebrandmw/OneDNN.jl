@@ -120,7 +120,7 @@ Base.lastindex(x::Arguments) = lastindex(x.args)
 append(x::Arguments{<:Tuple}, arg::Lib.dnnl_exec_arg_t) = Arguments(x.args..., arg)
 append(x::Arguments{<:Tuple}, y::Arguments{<:Tuple}) = Arguments(x.args..., y.args...)
 append(x::Arguments{<:AbstractVector}, arg::Lib.dnnl_exec_arg_t) = push!(x.args, arg)
-
+append(x::Tuple{<:AbstractArray,<:Arguments}, y) = (x[1], append(x[2], y[2]))
 #####
 ##### Construction Utilities
 #####
@@ -170,6 +170,7 @@ const CONTEXT_MAP = [
 ]
 
 macro dnnl_args(syms...)
+    extra_arg = Any[]
     exprs = map(syms) do sym
         # Handle direct interpolation.
         if isa(sym, Expr)
@@ -196,11 +197,20 @@ macro dnnl_args(syms...)
         if context === nothing
             error("Unknown DNNL Argument: $dnnl_arg_enum")
         end
+        if length(extra_arg) == 0
+            push!(extra_arg, esc(sym))
+        end
 
         return :(dnnl_arg(Lib.$(Symbol(dnnl_arg_enum)), $(esc(sym)), $context))
     end
 
-    return :(make_args($(exprs...)))
+    # Capture one argument to forward into `execute!` if we're using `similar` for
+    # scratchpad allocation.
+    if SIMILAR_FOR_SCRATCHPAD
+        return :((ancestor($(extra_arg[1])), make_args($(exprs...))))
+    else
+        return :(make_args($(exprs...)))
+    end
 end
 
 # Generic path, if any of the args is a vector, then result will also be a vector.

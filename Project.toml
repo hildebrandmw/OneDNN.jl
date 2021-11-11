@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
+CachedArrays = "ab676e89-bb37-4f49-b167-74749319f3dc"
 ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 CxxWrap = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
