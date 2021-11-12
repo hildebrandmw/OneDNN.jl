@@ -23,6 +23,7 @@ function pullback_for_default_literal_getproperty(cx::AContext, x, ::Val{f}) whe
     return _pullback(cx, literal_getfield, x, Val{f}())
 end
 
+# Experimental - should probably not set this to `true`.
 const SIMILAR_FOR_SCRATCHPAD = false
 
 #####
