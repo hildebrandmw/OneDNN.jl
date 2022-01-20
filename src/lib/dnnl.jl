@@ -1045,7 +1045,7 @@ struct dnnl_memory_desc_t
 end
 
 begin
-    mutable struct dnnl_memory end
+    struct dnnl_memory end
     function Base.cconvert(::Type{Ptr{dnnl_memory}}, x::Ptr{dnnl_memory})
         return x
     end
@@ -1292,7 +1292,7 @@ end
 end
 
 begin
-    mutable struct dnnl_engine end
+    struct dnnl_engine end
     function Base.cconvert(::Type{Ptr{dnnl_engine}}, x::Ptr{dnnl_engine})
         return x
     end
@@ -1310,7 +1310,7 @@ end
 const dnnl_engine_t = Ptr{dnnl_engine}
 
 begin
-    mutable struct dnnl_primitive_desc_iterator end
+    struct dnnl_primitive_desc_iterator end
     function Base.cconvert(
         ::Type{Ptr{dnnl_primitive_desc_iterator}}, x::Ptr{dnnl_primitive_desc_iterator}
     )
@@ -1339,7 +1339,7 @@ const dnnl_primitive_desc_iterator_t = Ptr{dnnl_primitive_desc_iterator}
 const const_dnnl_primitive_desc_iterator_t = Ptr{dnnl_primitive_desc_iterator}
 
 begin
-    mutable struct dnnl_primitive_desc end
+    struct dnnl_primitive_desc end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_desc}}, x::Ptr{dnnl_primitive_desc})
         return x
     end
@@ -1368,7 +1368,7 @@ const const_dnnl_primitive_desc_t = Ptr{dnnl_primitive_desc}
 end
 
 begin
-    mutable struct dnnl_primitive_attr end
+    struct dnnl_primitive_attr end
     function Base.cconvert(::Type{Ptr{dnnl_primitive_attr}}, x::Ptr{dnnl_primitive_attr})
         return x
     end
@@ -1392,7 +1392,7 @@ const dnnl_primitive_attr_t = Ptr{dnnl_primitive_attr}
 const const_dnnl_primitive_attr_t = Ptr{dnnl_primitive_attr}
 
 begin
-    mutable struct dnnl_post_ops end
+    struct dnnl_post_ops end
     function Base.cconvert(::Type{Ptr{dnnl_post_ops}}, x::Ptr{dnnl_post_ops})
         return x
     end
@@ -1412,7 +1412,7 @@ const dnnl_post_ops_t = Ptr{dnnl_post_ops}
 const const_dnnl_post_ops_t = Ptr{dnnl_post_ops}
 
 begin
-    mutable struct dnnl_primitive end
+    struct dnnl_primitive end
     function Base.cconvert(::Type{Ptr{dnnl_primitive}}, x::Ptr{dnnl_primitive})
         return x
     end
@@ -1490,7 +1490,7 @@ end
 end
 
 begin
-    mutable struct dnnl_stream end
+    struct dnnl_stream end
     function Base.cconvert(::Type{Ptr{dnnl_stream}}, x::Ptr{dnnl_stream})
         return x
     end

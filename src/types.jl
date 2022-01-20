@@ -145,7 +145,7 @@ eltwise!(postops::PostOps, ::typeof(identity), scale = 1) = nothing
 
 # Attach Post Ops to Attributes
 function Base.append!(a::Attributes, p::PostOps)
-    @apicall Lib.dnnl_primitive_attr_set_post_ops(a, p)
+    @apicall dnnl_primitive_attr_set_post_ops(a, p)
 end
 
 appendsum!(p::PostOps, scale = 1) = @apicall dnnl_post_ops_append_sum(p, scale)
@@ -223,14 +223,14 @@ function execute!(
     return nothing
 end
 
-function _execute!(primitive, args, scratchpad_md)
-    _memory = _MemoryPtr(SCRATCHPAD, md)
-    @time args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, _memory))
-
-    # Finally, call the primitive
-    @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
-    return destroy(_memory)
-end
+# function _execute!(primitive, _args, scratchpad_md)
+#     _memory = _MemoryPtr(SCRATCHPAD, md)
+#     args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, _memory))
+#
+#     # Finally, call the primitive
+#     @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
+#     return destroy(_memory)
+# end
 
 # Automatically apply recursively to tuples.
 kernel_exit_hook(x) = x

@@ -60,8 +60,7 @@ function rewrite(expr::Expr)
     if MacroTools.@capture(expr, mutable struct name_ end)
         if in(name, custom_pointer_types)
             expr = quote
-                $expr
-
+                struct $(name) end
                 function Base.cconvert(::Type{Ptr{$name}}, x::Ptr{$name})
                     return x
                 end

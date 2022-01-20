@@ -64,6 +64,7 @@ function _parallel_for(n::Cint, f::Ptr{Cvoid})
     Polyester.@batch per = thread for i in Base.OneTo(n)
         Wrap.call_opaque(f, i - 1, n)
     end
+    return nothing
 end
 
 # Initialize the default Engine and Stream.

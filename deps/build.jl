@@ -1,5 +1,6 @@
 onednn_url = "https://github.com/oneapi-src/OneDNN"
-onednn_tag = "v2.4.2"
+#onednn_tag = "v2.4.2"
+onednn_tag = "v2.5.1"
 install_dir = joinpath(@__DIR__, "dnnl")
 
 onednn_src = joinpath(@__DIR__, "oneDNN")
@@ -13,11 +14,11 @@ if !isdir(onednn_src)
 end
 
 # Apply performance patch.
-patchdir = joinpath(@__DIR__, "patches")
-patchfile = joinpath(patchdir, "cnn.patch")
-cd(onednn_src)
+# patchdir = joinpath(@__DIR__, "patches")
+# patchfile = joinpath(patchdir, "cnn.patch")
+# cd(onednn_src)
 
-run(`git apply $patchfile`)
+# run(`git apply $patchfile`)
 # try
 #     run(`git apply $patchfile`)
 # catch e

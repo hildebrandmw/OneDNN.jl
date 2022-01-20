@@ -79,6 +79,7 @@ end
 Base.length(::Lib.dnnl_exec_arg_t) = 1
 Base.iterate(x::Lib.dnnl_exec_arg_t, s = (x, nothing)) = s
 
+# Handle multiple arguments passed as a single item.
 function dnnl_arg(x, y::Union{AbstractArray{<:AbstractArray}, Tuple}, context::AccessContext = Reading())
     return map(enumerate(y)) do (i, _y)
         Lib.dnnl_exec_arg_t(x + (i - 1), dnnl_exec_arg(_y, context))
@@ -121,6 +122,7 @@ append(x::Arguments{<:Tuple}, arg::Lib.dnnl_exec_arg_t) = Arguments(x.args..., a
 append(x::Arguments{<:Tuple}, y::Arguments{<:Tuple}) = Arguments(x.args..., y.args...)
 append(x::Arguments{<:AbstractVector}, arg::Lib.dnnl_exec_arg_t) = push!(x.args, arg)
 append(x::Tuple{<:AbstractArray,<:Arguments}, y) = (x[1], append(x[2], y[2]))
+
 #####
 ##### Construction Utilities
 #####
