@@ -19,21 +19,21 @@ function matmul(
     end
 end
 
-# function matmul!(
-#     _dst::Memory,
-#     _weights::Memory,
-#     _src::Memory;
-#     forward = noforward(),
-#     attributes = noattributes(),
-# )
-#     opdesc = Ref{Lib.dnnl_matmul_desc_t}()
-#     @apicall dnnl_matmul_desc_init(opdesc, src, weights, Ptr{MemoryDesc}(), dst)
-#
-#     temp_primitive(opdesc, attributes, global_engine(), forward) do p, _
-#         execute!(p, @dnnl_args src weights dst)
-#     end
-#     return dst
-# end
+function matmul!(
+    dst::Memory,
+    weights::Memory,
+    src::Memory;
+    forward = noforward(),
+    attributes = noattributes(),
+)
+    opdesc = Ref{Lib.dnnl_matmul_desc_t}()
+    @apicall dnnl_matmul_desc_init(opdesc, src, weights, Ptr{MemoryDesc}(), dst)
+
+    temp_primitive(opdesc, attributes, global_engine(), forward) do p, _
+        execute!(p, @dnnl_args src weights dst)
+    end
+    return dst
+end
 
 # Support batched matmul in the third dimension.
 matmul_dst_dims(a, b) = matmul_dst_dims(logicalsize(a), logicalsize(b))

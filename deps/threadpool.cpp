@@ -7,71 +7,55 @@
 #include "jlcxx/stl.hpp"
 
 // Allow std::function to be called from Julia
-typedef std::function<void(int,int)> _dnnl_callback;
+typedef const std::function<void(int,int)> dnnl_kernel;
 
-class Opaque {
-  public:
-    Opaque(const _dnnl_callback& fn) : fn(fn) {}
-    const _dnnl_callback& fn;
-};
-
-typedef Opaque* dnnl_callback;
-typedef std::function<void(int,dnnl_callback)> julia_callback;
+// Type conversion chain for the win!
+template<typename R, typename ...A>
+std::function<R(A...)> make_function(void* f) {
+    return std::function<R(A...)>((R(*)(A...))f);
+}
 
 class threadpool : public dnnl::threadpool_interop::threadpool_iface {
-  private:
-    // Julia Registered Functions.
-    std::function<bool()> _get_in_parallel;
-
-    // Return an opaque function pointer.
-    // Need to keep track on the Julia side to ensure that we call this function
-    // correctly.
-    julia_callback _parallel_for;
-    int _num_threads;
-
   public:
     explicit threadpool(
         std::function<bool()> get_in_parallel,
-        //std::function<void(int, const std::function<void(int, int)> &)>
-        //    parallel_for,
-        julia_callback parallel_for,
-        int num_threads)
-        : _get_in_parallel(get_in_parallel), _parallel_for(parallel_for),
-          _num_threads(num_threads) {}
+        std::function<void(int,dnnl_kernel&)> parallel_for,
+        int num_threads
+        ): m_get_in_parallel(get_in_parallel)
+         , m_parallel_for(parallel_for)
+         , m_num_threads(num_threads) {}
 
-    int get_num_threads() const override { return _num_threads; }
-
-    bool get_in_parallel() const override { return _get_in_parallel(); }
-
+    int get_num_threads() const override { return m_num_threads; }
+    bool get_in_parallel() const override { return m_get_in_parallel(); }
     uint64_t get_flags() const override { return 0; }
 
-    void parallel_for(int n, const std::function<void(int, int)> &fn) override {
-        auto ptr = std::make_unique<Opaque>(fn);
-        _parallel_for(n, ptr.get());
-    }
+    // Delegate the calling of the parallel functions to a Julia function.
+    // This function will be provided by making an `@ccallable` function on the Julia
+    // side.
+    void parallel_for(int n, dnnl_kernel& fn) override { m_parallel_for(n, fn); }
+
+  private:
+    // Julia Registered Functions.
+    const std::function<bool()> m_get_in_parallel;
+    const std::function<void(int,dnnl_kernel&)> m_parallel_for;
+    const int m_num_threads;
 };
 
 JLCXX_MODULE define_julia_module(jlcxx::Module &mod) {
-    typedef bool (*in_parallel_type)();
-    typedef void (*parallel_for_type)(int, dnnl_callback);
+    // Wrap the `dnnl_kernel` type and call operator.
+    mod.add_type<dnnl_kernel>("dnnl_kernel");
+    mod.method("call", [](dnnl_kernel& fn, int n, int tid){ fn(n, tid); });
 
     mod.add_type<threadpool>("OneDNNThreadpool");
-
-    mod.method("call_opaque", [](void* _opaque, int i, int n){
-        auto opaque = static_cast<Opaque*>(_opaque);
-        opaque->fn(i, n);
-    });
-
     mod.method("construct_threadpool", [](
-        // Use "void*" at the interface so we can pass reasonable Julia functions.
-        void* _get_in_parallel,
-        void* _parallel_for,
+        // Use "void*" at the interface so we can pass Julia functions.
+        void* ptr_get_in_parallel,
+        void* ptr_parallel_for,
         int num_threads
     ){
-        auto get_in_parallel = std::function<bool()>((in_parallel_type)_get_in_parallel);
-        auto parallel_for = std::function<void(int,dnnl_callback)>(
-            (parallel_for_type) _parallel_for
-        );
+        auto get_in_parallel = make_function<bool>(ptr_get_in_parallel);
+        auto parallel_for = make_function<void, int, dnnl_kernel&>(ptr_parallel_for);
+
         return threadpool(get_in_parallel, parallel_for, num_threads);
     });
 }

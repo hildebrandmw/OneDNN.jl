@@ -59,10 +59,9 @@ const GLOBAL_ATTRIBUTES = Ref{Attributes}()
 const GLOBAL_THREADPOOL = Ref{Any}()
 
 _get_in_parallel() = (Threads.threadid() != 1)
-function _parallel_for(n::Cint, f::Ptr{Cvoid})
-    #Threads.@threads for i in Base.OneTo(n)
-    Polyester.@batch per = thread for i in Base.OneTo(n)
-        Wrap.call_opaque(f, i - 1, n)
+function _parallel_for(n::Cint, f::Wrap.dnnl_kernel)
+    Polyester.@batch (per = thread) for i in Base.OneTo(n)
+        Wrap.call(f, i - 1, n)
     end
     return nothing
 end
@@ -78,7 +77,7 @@ function __init__()
     # somewhere.
     threadpool = Wrap.construct_threadpool(
         @cfunction(_get_in_parallel, Bool, ()),
-        @cfunction(_parallel_for, Cvoid, (Cint, Ptr{Cvoid})),
+        @cfunction(_parallel_for, Cvoid, (Cint, Wrap.dnnl_kernelDereferenced)),
         Threads.nthreads(),
     )
     GLOBAL_THREADPOOL[] = threadpool
