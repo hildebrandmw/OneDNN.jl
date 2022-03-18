@@ -42,5 +42,9 @@ end
 
 function generate_linear_indices(layout::TiledArrays.MemoryLayout, size, padded_size)
     indexer = TiledArrays.TiledIndexer{layout}(size, padded_size)
+    return generate_linear_indices(indexer, size)
+end
+
+function generate_linear_indices(indexer::TiledArrays.TiledIndexer, size)
     return vec([TiledArrays.genindex(indexer, Tuple(I)) for I in CartesianIndices(size)])
 end

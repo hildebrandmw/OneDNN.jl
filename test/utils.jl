@@ -136,4 +136,47 @@ end
         @test ref_equal(OneDNN.wrap_ref(y), Ref(10))
     end
 
+    @testset "Testing SIMD Compress" begin
+        layouts = [
+            OneDNN.Lib.dnnl_ab,
+            OneDNN.Lib.dnnl_ba,
+            OneDNN.Lib.dnnl_AB16b16a,
+            OneDNN.Lib.dnnl_AB16b32a,
+            OneDNN.Lib.dnnl_AB16b64a,
+            OneDNN.Lib.dnnl_AB8b16a2b,
+        ]
+
+        src_base = randn(Float32, 2048, 2048)
+        dst_base = randn(Float32, 2048, 2048)
+        eta = Float32(2.0)
+        result_reference = dst_base .- (eta .* src_base)
+        for src_layout in layouts, dst_layout in layouts
+            @show src_layout, dst_layout
+            src = OneDNN.reorder(src_layout, OneDNN.Memory(copy(src_base)))
+            dst = OneDNN.reorder(dst_layout, OneDNN.Memory(copy(dst_base)))
+
+            isrc = OneDNN.generate_linear_indices(src)
+            idst = OneDNN.generate_linear_indices(dst)
+            map = OneDNN.simdcompress(Float32, isrc, idst)
+            OneDNN.sgd!(parent(dst), parent(src), map, eta)
+            @test OneDNN.materialize(dst) == result_reference
+
+            # Now - try again using the `Flux.update!` API
+            # Run it once to trigger caching of the translation layer,
+            # then run it again to make sure we actually hit in the cache.
+            src = OneDNN.reorder(src_layout, OneDNN.Memory(copy(src_base)))
+            dst = OneDNN.reorder(dst_layout, OneDNN.Memory(copy(dst_base)))
+            Flux.Optimise.update!(Flux.Descent(eta), dst, src)
+            @test OneDNN.materialize(dst) == result_reference
+            if src_layout != dst_layout
+                key = (OneDNN.memorydesc(dst), OneDNN.memorydesc(src))
+                @test haskey(OneDNN.TRANSLATION_DICT, key)
+
+                src = OneDNN.reorder(src_layout, OneDNN.Memory(copy(src_base)))
+                dst = OneDNN.reorder(dst_layout, OneDNN.Memory(copy(dst_base)))
+                Flux.Optimise.update!(Flux.Descent(eta), dst, src)
+                @test OneDNN.materialize(dst) == result_reference
+            end
+        end
+    end
 end # @testset

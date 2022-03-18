@@ -137,6 +137,32 @@ function Base.:(==)(a::MaybeRef{MemoryDesc}, b::MaybeRef{MemoryDesc})
     return Bool(Lib.dnnl_memory_desc_equal(wrap_ref(a), wrap_ref(b)))
 end
 
+Base.hash(x::Lib.dnnl_data_type_t, h::UInt = UInt(0x189073)) = hash(convert(UInt32, x), h)
+Base.hash(x::Lib.dnnl_format_kind_t, h::UInt = UInt(0x189073)) = hash(convert(UInt32, x), h)
+@generated function Base.hash(x::Lib.dnnl_memory_extra_desc_t, h::UInt = UInt(0xc0ffee))
+    exprs = [:(h = hash(getfield(x, $(QuoteNode(field))), h)) for field in fieldnames(x)]
+    return quote
+        $(exprs...)
+        return h
+    end
+end
+
+@generated function Base.hash(x::Lib.dnnl_blocking_desc_t, h::UInt = UInt(0xf238ee))
+    exprs = [:(h = hash(getfield(x, $(QuoteNode(field))), h)) for field in fieldnames(x)]
+    return quote
+        $(exprs...)
+        return h
+    end
+end
+
+@generated function Base.hash(x::MemoryDesc, h::UInt = UInt(0x987232e))
+    exprs = [:(h = hash(getfield(x, $(QuoteNode(field))), h)) for field in fieldnames(x)]
+    return quote
+        $(exprs...)
+        return h
+    end
+end
+
 getbytes(a::MaybeRef{MemoryDesc}) = signed(Lib.dnnl_memory_desc_get_size(wrap_ref(a)))
 
 #####
@@ -355,7 +381,7 @@ end
 ##### Bridge to TiledArrays
 #####
 
-function generate_linear_indices(memory::Memory{T,N}) where {T,N}
+function generate_linear_indices(memory::Memory{T,N})::Vector{Int} where {T,N}
     md = OneDNN.memorydesc(memory)
     _layout = layout(md)
     _size = logicalsize(md, Val(N))

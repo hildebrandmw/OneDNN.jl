@@ -3,6 +3,11 @@
 #####
 
 reorder(from::Memory{T}) where {T} = reorder(memorydesc(T, size(from)), from)
+function reorder(tag::Lib.dnnl_format_tag_t, from::Memory{T,N}) where {T,N}
+    md = memorydesc(T, size(from), tag)
+    return reorder(md, from)
+end
+
 function reorder(md::MemoryDesc, from::Memory)
     to = similar(from, eltype(from), size(from), md)
     reorder!(to, from)

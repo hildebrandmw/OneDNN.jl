@@ -80,7 +80,9 @@ Base.length(::Lib.dnnl_exec_arg_t) = 1
 Base.iterate(x::Lib.dnnl_exec_arg_t, s = (x, nothing)) = s
 
 # Handle multiple arguments passed as a single item.
-function dnnl_arg(x, y::Union{AbstractArray{<:AbstractArray}, Tuple}, context::AccessContext = Reading())
+function dnnl_arg(
+    x, y::Union{AbstractArray{<:AbstractArray},Tuple}, context::AccessContext = Reading()
+)
     return map(enumerate(y)) do (i, _y)
         Lib.dnnl_exec_arg_t(x + (i - 1), dnnl_exec_arg(_y, context))
     end
@@ -296,3 +298,104 @@ kind(::Training) = Lib.dnnl_forward_training
 kind(::Backward) = Lib.dnnl_backward
 
 dnnl_convert(x::AbstractKind) = kind(x)
+
+#####
+##### SIMDPointerMap
+#####
+
+struct SIMDPtrMap{N,T}
+    map::Vector{Pair{Int,Int}}
+    remainder::Vector{Pair{Int,Int}}
+end
+Base.length(v::SIMDPtrMap) = length(v.map)
+Base.isempty(v::SIMDPtrMap) = isempty(v.map)
+SIMDPtrMap{N,T}() where {N,T} = SIMDPtrMap{N,T}(Pair{Int,Int}[], Pair{Int,Int}[])
+
+vectortype(::Type{Float32}) = SIMD.Vec{16,Float32}
+
+function simdcompress(
+    ::Type{T}, isrc::AbstractVector{<:Integer}, idst::AbstractVector{<:Integer}
+) where {T}
+    return simdcompress!(SIMDPtrMap{length(vectortype(T)),T}(), isrc, idst)
+end
+
+function simdcompress!(
+    compressed::SIMDPtrMap{N,T},
+    isrc::AbstractVector{<:Integer},
+    idst::AbstractVector{<:Integer},
+) where {N,T}
+    @assert length(isrc) == length(idst)
+    sort!(Glue(isrc, idst); by = last, alg = QuickSort)
+
+    simd = vectortype(T)
+    (; map, remainder) = compressed
+    empty!(map)
+    empty!(remainder)
+    i = 1
+    while i <= length(isrc)
+        # Check if we can vectorize this group.
+        a, b = isrc[i], idst[i]
+        success = true
+        for j = 0:(length(simd) - 1)
+            if (i + j) > length(isrc)
+                success = false
+                break
+            end
+
+            p, q = isrc[i + j], idst[i + j]
+            if (p != a + j) || (q != b + j)
+                success = false
+                break
+            end
+        end
+        if success
+            push!(map, a => b)
+            i += length(simd)
+        else
+            push!(remainder, a => b)
+            i += 1
+        end
+    end
+    @info """
+    Could not SIMD compress $(length(remainder)) of $(length(isrc)) indices!
+    """
+
+    return compressed
+end
+
+function sgd!(
+    dst::AbstractArray{Float32}, src::AbstractArray{Float32}, v::SIMDPtrMap{16,Float32}, eta
+)
+    (; map, remainder) = v
+    Polyester.@batch (per = core) for i in eachindex(map)
+        src_index_simd, dst_index_simd = @inbounds(map[i])
+
+        src_ptr_simd = pointer(src, src_index_simd)
+        dst_ptr_simd = pointer(dst, dst_index_simd)
+        src_simd = SIMD.vload(SIMD.Vec{16,Float32}, src_ptr_simd)
+        dst_simd = SIMD.vload(SIMD.Vec{16,Float32}, dst_ptr_simd)
+        SIMD.vstore(dst_simd - eta * src_simd, dst_ptr_simd, nothing)
+    end
+
+    for i in eachindex(remainder)
+        src_index, dst_index = @inbounds(remainder[i])
+        @inbounds dst[dst_index] -= eta * src[src_index]
+    end
+    return dst
+end
+
+#####
+##### Sort pairs of vectors
+#####
+
+struct Glue{A,B} <: AbstractVector{Tuple{A,B}}
+    a::Vector{A}
+    b::Vector{B}
+end
+
+Base.size(g::Glue) = size(g.a)
+Base.getindex(g::Glue, i::Int) = (g.a[i], g.b[i])
+function Base.setindex!(g::Glue, (a, b), i::Int)
+    return (g.a[i], g.b[i]) = (a, b)
+end
+

@@ -15,6 +15,7 @@ import ChainRulesCore
 import Flux
 import MacroTools
 import Polyester
+import SIMD
 import UnPack: @unpack
 import Zygote
 import ZygoteRules: ZygoteRules, _pullback, AContext, literal_getproperty, literal_getfield
@@ -101,72 +102,42 @@ global_stream() = GLOBAL_STREAM[]
 ##### Flux compat
 #####
 
+const TRANSLATION_DICT_LOCK = ReentrantLock()
+const TRANSLATION_DICT = Dict{Tuple{MemoryDesc,MemoryDesc},SIMDPtrMap}()
+
 # # TODO: Turns out that updating is better parallelized across the layer dimension than the
 # # within each parameter itself
 function Flux.Optimise.update!(
     o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{U,N}
 ) where {T,U,N}
-    # Make sure both objects have the same memory layout.
-    # TODO: Handle different types correctly.
-    # mx = memorydesc(x)
-    # mΔ = memorydesc(Δ)
-    # if mx != mΔ
-    #     error("Incompatible memory formats!")
-    #     # # Enter the realm of the type unstable!
-    #     # sz = logicalsize(mx, Val(N))
-    #     # indexer_x = TiledArrays.TiledIndexer{layout(mx)}(sz, padded_size(mx, Val(N)))
-    #     # indexer_Δ = TiledArrays.TiledIndexer{layout(mΔ)}(
-    #     #     logicalsize(mΔ, Val(N)), padded_size(mΔ, Val(N))
-    #     # )
-    #     # update_typed!(o, parent(x), indexer_x, parent(Δ), indexer_Δ, CartesianIndices(sz))
-    #     # return nothing
-    # end
+    mx = memorydesc(x)
+    mΔ = memorydesc(Δ)
+    if mx != mΔ
+        translation = Base.@lock TRANSLATION_DICT_LOCK begin
+            key = (mx, mΔ)
+            _translation = get(TRANSLATION_DICT, key, nothing)
+            if _translation === nothing
+                ix = generate_linear_indices(x)
+                iΔ = generate_linear_indices(Δ)
+                _translation = simdcompress(T, iΔ, ix)
+                TRANSLATION_DICT[key] = _translation
+            end
+            _translation
+        end
+        sgd!(parent(x), parent(Δ), translation, convert(Float32, o.eta))
+    else
+        # Layouts are the same - just need to apply elementwise.
+        _sgd!(parent(x), parent(Δ), convert(Float32, o.eta))
+    end
 
-    eta = convert(Float32, o.eta)
-    xa = vec(parent(x))
-    Δa = vec(parent(Δ))
-    xa .-= (eta .* Δa)
     return nothing
 end
 
-function Flux.Optimise.update!(
-    o::Flux.Optimise.Descent, x::Memory{T,N}, ix, y::Memory{U,N}, iy
-) where {T,U,N}
-    px = parent(x)
-    py = parent(y)
-    eta = convert(Float32, o.eta)
-    for i in eachindex(ix, iy)
-        @inbounds(px[ix[i]] -= eta * py[iy[i]])
+function _sgd!(x::AbstractArray{T}, Δ::AbstractArray{T}, eta::T) where {T}
+    for i in eachindex(x, Δ)
+        @inbounds(x[i] -= eta * Δ[i])
     end
-    return nothing
-end
-
-#####
-##### Mirrored
-#####
-
-function Flux.Optimise.update!(
-    o::Flux.Optimise.Descent, x::Mirrored, Δ::Memory{T,N}
-) where {T,N}
-    eta = convert(Float32, o.eta)
-    px = parent(x)
-    pΔ = parent(Δ)
-    for i in eachindex(pΔ)
-        @inbounds px[i] -= eta * pΔ[i]
-    end
-    return nothing
-end
-
-function Flux.Optimise.update!(
-    o::Flux.Optimise.Descent, x::Mirrored, ix, y::Memory{T,N}, iy
-) where {T,N}
-    px = parent(x)
-    py = parent(y)
-    eta = convert(Float32, o.eta)
-    for i in eachindex(ix, iy)
-        @inbounds(px[ix[i]] -= eta * py[iy[i]])
-    end
-    return nothing
+    return x
 end
 
 #####
@@ -183,34 +154,5 @@ function Zygote.accum(_x::SubArray, y::Memory)
     binary!(+, x, x, y)
     return x
 end
-
-# function update_typed!(
-#     o::Flux.Optimise.Descent,
-#     x,
-#     indexer_x::TiledArrays.TiledIndexer,
-#     y,
-#     indexer_y::TiledArrays.TiledIndexer,
-#     iter,
-# )
-#     for i in iter
-#         ix = TiledArrays.genindex(indexer_x, Tuple(i))
-#         iy = TiledArrays.genindex(indexer_y, Tuple(i))
-#         x[ix] -= o.eta * y[iy]
-#     end
-#     return nothing
-# end
-
-# function update_typed!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-#     return x .= x .- (o.eta .* Δ)
-# end
-
-# # # Apply the negative here so we can just add together in `update!`.
-# # # This is because it appears that OneDNN is lacking a binary `-`
-# # Flux.Optimise.apply!(o::Flux.Optimise.Descent, x, Δ::Memory) = linear!(Δ, -o.eta)
-# #
-# # # Expect `Memory` objects to already be negated from the `apply!` step.
-# # function Flux.Optimise.update!(o::Flux.Optimise.Descent, x::Memory, Δ::Memory)
-# #     return binary!(+, x, Flux.Optimise.apply!(o, x, Δ))
-# end
 
 end # module
