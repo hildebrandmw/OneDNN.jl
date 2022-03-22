@@ -367,7 +367,7 @@ function sgd!(
     dst::AbstractArray{Float32}, src::AbstractArray{Float32}, v::SIMDPtrMap{16,Float32}, eta
 )
     (; map, remainder) = v
-    Polyester.@batch (per = core) for i in eachindex(map)
+    for i in eachindex(map)
         src_index_simd, dst_index_simd = @inbounds(map[i])
 
         src_ptr_simd = pointer(src, src_index_simd)

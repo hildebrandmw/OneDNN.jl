@@ -55,7 +55,6 @@ JLCXX_MODULE define_julia_module(jlcxx::Module &mod) {
     ){
         auto get_in_parallel = make_function<bool>(ptr_get_in_parallel);
         auto parallel_for = make_function<void, int, dnnl_kernel&>(ptr_parallel_for);
-
         return threadpool(get_in_parallel, parallel_for, num_threads);
     });
 }

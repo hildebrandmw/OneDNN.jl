@@ -51,8 +51,6 @@ include("ops/pool.jl")
 include("ops/innerproduct.jl")
 include("ops/convolution.jl")
 
-# include("placeholder.jl")
-
 # Just create a global engine and stream for everything to use for now.
 const GLOBAL_ENGINE = Ref{Engine}()
 const GLOBAL_STREAM = Ref{Stream}()
