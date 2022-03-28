@@ -176,7 +176,8 @@ end
     seen = Set{UInt32}()
 
     # Formats that have failed the round-trip test.
-    broken_formats = Set([:dnnl_ABc4a4b, :dnnl_ABcd4a4b])
+    #broken_formats = Set([:dnnl_ABc4a4b, :dnnl_ABcd4a4b])
+    broken_formats = Set{Symbol}()
 
     failed_formats = Set{Symbol}()
     translation_failed = Set{Symbol}()

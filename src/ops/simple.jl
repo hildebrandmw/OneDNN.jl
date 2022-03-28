@@ -30,9 +30,7 @@ end
 
 # Pullback is simply the identity.
 # Let downstream kernels decide if they want to reorder the sensitivities.
-function ChainRulesCore.rrule(
-    ::typeof(reorder), from::Memory
-)
+function ChainRulesCore.rrule(::typeof(reorder), from::Memory)
     to = reorder(from)
     function reorder_pullback(Δ)
         return (ChainRulesCore.NoTangent(), Δ)
@@ -40,9 +38,7 @@ function ChainRulesCore.rrule(
     return to, reorder_pullback
 end
 
-function ChainRulesCore.rrule(
-    ::typeof(reorder), desc::MemoryDesc, from::Memory
-)
+function ChainRulesCore.rrule(::typeof(reorder), desc::MemoryDesc, from::Memory)
     to = reorder(desc, from)
     function reorder_pullback(Δ)
         return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), Δ)
@@ -56,7 +52,9 @@ function toeltype(::Type{T}, from::OneDNN.Memory) where {T}
     return reorder!(to, from)
 end
 
-function ChainRulesCore.rrule(::typeof(toeltype), ::Type{T}, from::OneDNN.Memory{U}) where {T,U}
+function ChainRulesCore.rrule(
+    ::typeof(toeltype), ::Type{T}, from::OneDNN.Memory{U}
+) where {T,U}
     to = toeltype(T, from)
     function toeltype_pullback(Δ)
         return (ChainRulesCore.NoTangent(), ChainRulesCore.NoTangent(), toeltype(U, Δ))
@@ -274,6 +272,42 @@ function reorder_if_any(md::MemoryDesc, desc::PrimitiveDescriptor, x::Memory, ke
 end
 
 #####
+##### Softmax
+#####
+
+function softmax(src::Memory{T,N}, axis::Integer) where {T,N}
+    opdesc = Ref{Lib.dnnl_softmax_desc_t}()
+    @apicall dnnl_softmax_forward_desc_init(opdesc, Inference(), src, N - axis)
+    return temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        dst = similar(src)
+        execute!(p, @dnnl_args dst src)
+        return dst
+    end
+end
+
+function softmax_backward(
+    diff_dst::Memory{T,N}, dst::Memory{T,N}, axis::Integer
+) where {T,N}
+    opdesc = Ref{Lib.dnnl_softmax_desc_t}()
+    @apicall dnnl_softmax_backward_desc_init(opdesc, diff_dst, dst, N - axis)
+
+    return temp_primitive(opdesc, noattributes(), global_engine(), noforward()) do p, _
+        diff_src = similar(diff_dst)
+        execute!(p, @dnnl_args diff_dst dst diff_src)
+        return diff_src
+    end
+end
+
+function ChainRulesCore.rrule(::typeof(softmax), src::Memory, axis)
+    dst = softmax(src, axis)
+    function softmax_pullback(diff_dst)
+        diff_src = softmax_backward(OneDNN.Memory(diff_dst), dst, axis)
+        return (ChainRulesCore.NoTangent(), diff_src, ChainRulesCore.NoTangent())
+    end
+    return dst, softmax_pullback
+end
+
+#####
 ##### Logsoftmax
 #####
 
@@ -288,7 +322,9 @@ function logsoftmax(src::Memory{T,N}, axis::Integer) where {T,N}
     end
 end
 
-function logsoftmax_backward(diff_dst::Memory{T,N}, dst::Memory{T,N}, axis::Integer) where {T,N}
+function logsoftmax_backward(
+    diff_dst::Memory{T,N}, dst::Memory{T,N}, axis::Integer
+) where {T,N}
     opdesc = Ref{Lib.dnnl_logsoftmax_desc_t}()
     @apicall dnnl_logsoftmax_backward_desc_init(opdesc, diff_dst, dst, N - axis)
 
@@ -302,12 +338,8 @@ end
 function ChainRulesCore.rrule(::typeof(logsoftmax), src::Memory, axis)
     dst = logsoftmax(src, axis)
     function logsoftmax_pullback(diff_dst)
-        diff_src = logsoftmax_backward(diff_dst, dst, axis)
-        return (
-            ChainRulesCore.NoTangent(),
-            diff_src,
-            ChainRulesCore.NoTangent(),
-        )
+        diff_src = logsoftmax_backward(OneDNN.Memory(diff_dst), dst, axis)
+        return (ChainRulesCore.NoTangent(), diff_src, ChainRulesCore.NoTangent())
     end
     return dst, logsoftmax_pullback
 end

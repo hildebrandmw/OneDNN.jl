@@ -223,15 +223,6 @@ function execute!(
     return nothing
 end
 
-# function _execute!(primitive, _args, scratchpad_md)
-#     _memory = _MemoryPtr(SCRATCHPAD, md)
-#     args = append(_args, Lib.dnnl_exec_arg_t(Lib.DNNL_ARG_SCRATCHPAD, _memory))
-#
-#     # Finally, call the primitive
-#     @apicall dnnl_primitive_execute(primitive, global_stream(), length(args), args)
-#     return destroy(_memory)
-# end
-
 # Automatically apply recursively to tuples.
 kernel_exit_hook(x) = x
 kernel_exit_hook(x::Union{<:Tuple,<:NamedTuple}) = map(kernel_exit_hook, x)

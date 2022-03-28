@@ -104,6 +104,8 @@ function BatchNorm(scale_shift::AbstractMatrix, activation = identity; epsilon =
     return BatchNorm(OneDNN.Memory(scale_shift), activation, epsilon, attributes, opdesc)
 end
 
+Flux.@functor BatchNorm (scale_shift,)
+
 function (bn::BatchNorm)(x)
     return batchnorm_inference(
         Memory(x), bn.scale_shift; bn.epsilon, bn.attributes, bn.opdesc

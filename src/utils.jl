@@ -356,9 +356,9 @@ function simdcompress!(
             i += 1
         end
     end
-    @info """
-    Could not SIMD compress $(length(remainder)) of $(length(isrc)) indices!
-    """
+    # @info """
+    # Could not SIMD compress $(length(remainder)) of $(length(isrc)) indices!
+    # """
 
     return compressed
 end

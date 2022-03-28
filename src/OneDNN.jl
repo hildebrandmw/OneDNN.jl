@@ -108,6 +108,7 @@ const TRANSLATION_DICT = Dict{Tuple{MemoryDesc,MemoryDesc},SIMDPtrMap}()
 function Flux.Optimise.update!(
     o::Flux.Optimise.Descent, x::Memory{T,N}, Δ::Memory{U,N}
 ) where {T,U,N}
+    @assert size(x) == size(Δ)
     mx = memorydesc(x)
     mΔ = memorydesc(Δ)
     if mx != mΔ
