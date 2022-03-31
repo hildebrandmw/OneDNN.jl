@@ -234,7 +234,7 @@ end
 function rrule_fused(conv::T, src) where {T<:Conv}
     src_size = size(src)
     nt = conv(src, true; kind = Training())
-    @unpack dst, forward = nt
+    (; dst, forward) = nt
     function conv_fused_pullback(_diff_dst)
         # Maybe convert argument
         diff_dst = Memory(_diff_dst)

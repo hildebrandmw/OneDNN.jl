@@ -132,6 +132,17 @@ function Flux.Optimise.update!(
     return nothing
 end
 
+function apply_sgd!(eta::T, x::Memory{T,N}, dx::Memory{T,N}) where {T,N}
+    @assert size(x) == size(dx)
+    mx = memorydesc(x)
+    mdx = memorydesc(dx)
+    if mx != mdx
+        _sgd!(parent(x), parent(reorder(mx, dx)), eta)
+    else
+        _sgd!(parent(x), parent(dx), eta)
+    end
+end
+
 function _sgd!(x::AbstractArray{T}, Δ::AbstractArray{T}, eta::T) where {T}
     for i in eachindex(x, Δ)
         @inbounds(x[i] -= eta * Δ[i])
