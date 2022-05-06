@@ -44,7 +44,13 @@ function batchnorm_training(
             execute!(p, @dnnl_args src scale_shift dst mean variance)
             return (; dst, mean, variance, workspace = nothing, forward = noforward())
         elseif activation === Flux.relu
-            workspace = similar(src)
+            # Setup and construct the workspace.
+            workspace_md = query_md(pd, @query(workspace))
+            @assert ndims(workspace_md) == 1
+            @assert workspace_md.data_type == Lib.dnnl_u8
+            workspace_dims = logicalsize(workspace_md, Val(1))
+            workspace = similar(src, UInt8, workspace_dims, workspace_md)
+
             execute!(p, @dnnl_args src scale_shift dst mean variance workspace)
             return (; dst, mean, variance, workspace, forward = pd)
         end
@@ -133,23 +139,24 @@ end
 
 function batchnorm_rrule_fused(bn::BatchNorm, src::Memory)
     nt = batchnorm_training(src, bn.scale_shift, bn.activation; bn.epsilon, bn.opdesc)
+    (; mean, variance, forward, workspace, dst) = nt
 
     function batchnorm_fused_pullback(diff_data::Memory)
         Δ = batchnorm_backward(
             diff_data,
             src,
             bn.scale_shift,
-            nt.mean,
-            nt.variance;
-            nt.forward,
+            mean,
+            variance;
+            forward,
             bn.epsilon,
-            nt.workspace,
+            workspace,
             bn.opdesc,
         )
         return ((; scale_shift = Δ.diff_scale_shift), Δ.diff_src)
     end
 
-    return (nt.dst, batchnorm_fused_pullback)
+    return (dst, batchnorm_fused_pullback)
 end
 
 function batchnorm_rrule_unfused(bn::BatchNorm, src::Memory)

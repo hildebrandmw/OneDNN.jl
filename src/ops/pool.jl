@@ -107,7 +107,7 @@ function ChainRulesCore.rrule(pool::Pooling{T}, _src) where {T}
     src = Memory(_src)
     src_md_any = toany(src)
     nt = pool(src; kind = Training())
-    @unpack workspace, forward = nt
+    (; workspace, forward, dst) = nt
 
     function pooling_pullback(_diff_dst)
         diff_dst = Memory(_diff_dst)
@@ -117,5 +117,5 @@ function ChainRulesCore.rrule(pool::Pooling{T}, _src) where {T}
         return (ChainRulesCore.NoTangent(), diff_src)
     end
 
-    return nt.dst, pooling_pullback
+    return dst, pooling_pullback
 end

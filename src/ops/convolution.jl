@@ -144,6 +144,7 @@ function Conv(
     stride = 1,
     padding = 0,
     dilation = 0,
+    allocator = stdallocator,
 ) where {T,N}
     kernel = (size(_weights, 1), size(_weights, 2))
     stride = expand(Val(2), stride)
@@ -151,8 +152,8 @@ function Conv(
     padding = expand(Val(2), padding)
 
     dims = Dims{2}(kernel, stride, dilation, padding)
-    weights = Memory(_weights)
-    bias = Memory(_bias)
+    weights = make_memory(_weights, allocator)
+    bias = make_memory(_bias, allocator)
     opdesc = Ref{Lib.dnnl_convolution_desc_t}()
 
     # Create attributes for fusing the postop.
@@ -167,7 +168,7 @@ _slice(x::NTuple{N}) where {N} = ntuple(i -> x[(2 * i) - 1], Val(div(N, 2)))
 _subone(x::NTuple{N}) where {N} = ntuple(i -> x[i] - 1, Val(N))
 
 # Note: OneDNN's convolution is Flux's CrossCor
-function Conv(m::Flux.CrossCor)
+function Conv(m::Flux.CrossCor; allocator = stdallocator)
     # Flux stores its padding as a 2N tuple.
     # Since we're just using symmetrical padding for now, we grab slice every other
     # padding value.
@@ -178,6 +179,7 @@ function Conv(m::Flux.CrossCor)
         m.stride,
         padding = _slice(m.pad),
         dilation = _subone(m.dilation),
+        allocator = stdallocator,
     )
 end
 
@@ -227,11 +229,16 @@ end
 
 function ChainRulesCore.rrule(conv::Conv, _src::AbstractArray, _fuse_activation = false)
     # The result of `canfuse` is known at compile time, so Julia can optimize out the branch.
+    (; activation) = conv
     src = Memory(_src)
-    return canfuse(conv.activation) ? rrule_fused(conv, src) : rrule_unfused(conv, src)
+    return if canfuse(activation)
+        rrule_fused(conv, src)
+    else
+        rrule_unfused(conv, src)
+    end
 end
 
-function rrule_fused(conv::T, src) where {T<:Conv}
+function rrule_fused(conv::T, src) where {F,T<:Conv}
     src_size = size(src)
     nt = conv(src, true; kind = Training())
     (; dst, forward) = nt
@@ -244,6 +251,31 @@ function rrule_fused(conv::T, src) where {T<:Conv}
         # Backprop convolution kernel
         diff_src, diff_dst_reordered = convolution_backward_data(
             src_size, conv.weights, diff_dst_pre, conv.dims; forward, conv.opdesc
+        )
+        (diff_weights, diff_bias) = convolution_backward_weights(
+            size(conv.weights), src, diff_dst_reordered, conv.dims; forward, conv.opdesc
+        )
+
+        return (
+            ChainRulesCore.Tangent{T}(; weights = diff_weights, bias = diff_bias),
+            diff_src,
+            ChainRulesCore.NoTangent(),
+        )
+    end
+    return dst, conv_fused_pullback
+end
+
+# Special-case identity activations.
+function rrule_fused(conv::T, src) where {T<:Conv{<:Memory,<:Memory,typeof(identity)}}
+    src_size = size(src)
+    nt = conv(src, true; kind = Training())
+    (; dst, forward) = nt
+    function conv_fused_pullback(_diff_dst)
+        # Maybe convert argument
+        diff_dst = Memory(_diff_dst)
+        # Backprop convolution kernel
+        diff_src, diff_dst_reordered = convolution_backward_data(
+            src_size, conv.weights, diff_dst, conv.dims; forward, conv.opdesc
         )
         (diff_weights, diff_bias) = convolution_backward_weights(
             size(conv.weights), src, diff_dst_reordered, conv.dims; forward, conv.opdesc

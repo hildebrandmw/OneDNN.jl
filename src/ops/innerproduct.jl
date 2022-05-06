@@ -107,19 +107,25 @@ end
 function Dense(
     weights::AbstractMatrix{T},
     bias::AbstractVector{T},
-    activation::F = identity,
+    activation::F = identity;
+    allocator = stdallocator,
 ) where {T,F}
-    weights_memory = Memory(weights)
     attributes = Attributes()
     postops = PostOps()
     eltwise!(postops, activation)
     append!(attributes, postops)
 
     return Dense(
-        Memory(weights), Memory(bias), activation, attributes, false
+        make_memory(weights, allocator),
+        make_memory(bias, allocator),
+        activation,
+        attributes,
+        false,
     )
 end
-Dense(m::Flux.Dense) = Dense(OneDNN.Memory(transpose(m.weight)), OneDNN.Memory(m.bias), m.σ)
+function Dense(m::Flux.Dense; allocator = stdallocator)
+    return Dense(transpose(m.weight), m.bias, m.σ; allocator)
+end
 
 Flux.@functor Dense (weights, bias)
 function ZygoteRules._pullback(
@@ -154,11 +160,7 @@ function (dense::Dense{<:OneDNN.Memory{T}})(_src, fuse_activation = true) where 
         return dst
     else
         return innerproduct(
-            src,
-            dense.weights,
-            dense.bias;
-            attributes = attributes,
-            src_md = toany(src),
+            src, dense.weights, dense.bias; attributes = attributes, src_md = toany(src)
         )
     end
 end

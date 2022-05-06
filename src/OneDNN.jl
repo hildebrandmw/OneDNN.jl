@@ -26,6 +26,14 @@ end
 
 # Experimental - should probably not set this to `true`.
 const SIMILAR_FOR_SCRATCHPAD = false
+stdallocator(::Type{T}, args...) where {T} = Array{T}(undef, args...)
+
+make_memory(array::AbstractArray, ::typeof(stdallocator)) = Memory(array)
+function make_memory(array::AbstractArray{T}, allocator) where {T}
+    new = allocator(T, size(array)...)
+    copyto!(new, array)
+    return new
+end
 
 #####
 ##### deps
