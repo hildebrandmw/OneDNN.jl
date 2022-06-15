@@ -21,6 +21,30 @@ function concat(multiple_src::TupleOrVector{<:Memory{T,N}}, dim::Integer) where 
     end
 end
 
+function concat!(dst::Memory{T,N}, multiple_src::TupleOrVector{<:Memory{T,N}}, dim::Integer) where {T,N}
+    nargs = length(multiple_src)
+    outputdim = sum(i -> size(i, dim), multiple_src)
+    dims = size(first(multiple_src))
+    dst_dims = ntuple(i -> (i == dim) ? outputdim : dims[i], Val(N))
+    @assert dst_dims == size(dst)
+    dst_md = memorydesc(dst)
+
+    return temp_primitive(
+        Lib.dnnl_concat_primitive_desc_create,
+        dst_md,
+        nargs,
+        N - dim,
+        map(memorydesc, multiple_src),
+        noattributes(),
+        global_engine(),
+    ) do p, _
+        #dst_md = query_md(pd, @query(dst))
+        #dst = similar(first(multiple_src), T, dst_dims, dst_md)
+        execute!(p, @dnnl_args dst multiple_src)
+        return dst
+    end
+end
+
 #####
 ##### Slicing
 #####

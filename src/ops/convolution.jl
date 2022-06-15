@@ -184,7 +184,6 @@ function Conv(m::Flux.CrossCor; allocator = stdallocator)
 end
 
 Flux.@functor Conv (weights, bias)
-
 function (conv::Conv)(_src, fuse_activation = true; kw...)
     src = Memory(_src)
     attributes = fuse_activation ? conv.attributes : noattributes()

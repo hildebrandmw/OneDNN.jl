@@ -14,7 +14,7 @@ function batchnorm_inference(
         opdesc, Inference(), src, epsilon, batchnorm_flags()
     )
 
-    return temp_primitive(opdesc, attributes, global_engine(), noforward()) do p, pd
+    return @time temp_primitive(opdesc, attributes, global_engine(), noforward()) do p, pd
         dst = similar(src)
         execute!(p, @dnnl_args src scale_shift dst)
         return dst

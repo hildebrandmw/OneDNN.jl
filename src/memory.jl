@@ -209,7 +209,7 @@ arraytype(::Memory{T,N,A}) where {T,N,A} = A
 
 function Base.show(io::IO, x::Memory)
     print(io, "Opaque Memory $(logicalsize(x))")
-    x.offset != 1 && print(io, " - SubArray")
+    return x.offset != 1 && print(io, " - SubArray")
 end
 Base.show(io::IO, ::MIME"text/plain", x::Memory) = show(io, x)
 
@@ -325,10 +325,15 @@ function Base.similar(
     # This will be allocated as just a plain vector with dimensions padded with ones so it
     # has the same dimension as the wrapped "Memory"
     padded_dims = (div(bytes, sizeof(T)), ntuple(_ -> 1, Val(N - 1))...)
-    out = similar(x.array, T, padded_dims)
+    out = similar(ancestor(x), T, padded_dims)
 
-    # Since we specifically created this array, the offset will always start atone.
+    # Since we specifically created this array, the offset will always start at one.
     return Memory(out, 1, dims, MemoryPtr(out, desc))
+end
+
+Base.similar(x::Memory{T,M}, dims::NTuple{N,Int}) where {T,M,N} = similar(x, T, dims)
+function Base.similar(x::Memory{T,M}, dims::NTuple{N,Int}, desc::MemoryDesc) where {T,M,N}
+    return similar(x, T, dims, desc)
 end
 
 materialize(x::AbstractArray, args...; kw...) = x
