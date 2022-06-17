@@ -105,7 +105,7 @@ Chain(
   Dense(40 => 10, σ),                   # 410 parameters
 )                   # Total: 6 arrays, 1_470 parameters, 6.117 KiB.
 
-julia> onednn = Chain(OneDNN.Dense(flux)...)
+julia> onednn = Chain(OneDNN.Dense.(flux)...)
 Chain(
   Dense(10 => 20, relu),                # 220 parameters
   Dense(20 => 40, relu),                # 840 parameters
@@ -133,6 +133,8 @@ Also, note that we don't need to convert `x` to a `OneDNN.Memory` when passing i
 Convolution layers function much like dense layers, except that OneDNN's convolution is really mapped
 to Flux's cross-correlation.
 ```julia
+julia> using Flux, Zygote, OneDNN
+
 julia> flux = Chain(
        Flux.CrossCor((3, 3), 10 => 20, identity),
        Flux.CrossCor((5, 5), 20 => 40, Flux.sigmoid),
