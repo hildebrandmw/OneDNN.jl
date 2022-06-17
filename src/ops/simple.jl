@@ -170,6 +170,12 @@ forward_expand(::typeof(Base.sqrt)) = (Lib.dnnl_eltwise_sqrt, zero(Float32), zer
 forward_expand(::typeof(Flux.relu)) = (Lib.dnnl_eltwise_relu, zero(Float32), zero(Float32))
 forward_expand(::typeof(Base.log)) = (Lib.dnnl_eltwise_log, zero(Float32), zero(Float32))
 
+Base.broadcasted(::typeof(Base.abs), x::Memory) = abs(x)
+Base.broadcasted(::typeof(Flux.sigmoid), x::Memory) = Flux.sigmoid(x)
+Base.broadcasted(::typeof(Base.sqrt), x::Memory) = sqrt(x)
+Base.broadcasted(::typeof(Flux.relu), x::Memory) = Flux.relu(x)
+Base.broadcasted(::typeof(Base.log), x::Memory) = log(x)
+
 # Conversion to OneDNN backward eltwise ops
 function backward_expand(::typeof(Base.abs))
     return (Lib.dnnl_eltwise_abs, zero(Float32), zero(Float32), false)

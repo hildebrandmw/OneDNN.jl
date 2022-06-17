@@ -38,8 +38,6 @@ function concat!(dst::Memory{T,N}, multiple_src::TupleOrVector{<:Memory{T,N}}, d
         noattributes(),
         global_engine(),
     ) do p, _
-        #dst_md = query_md(pd, @query(dst))
-        #dst = similar(first(multiple_src), T, dst_dims, dst_md)
         execute!(p, @dnnl_args dst multiple_src)
         return dst
     end

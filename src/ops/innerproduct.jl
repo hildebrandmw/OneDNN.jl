@@ -127,6 +127,14 @@ function Dense(m::Flux.Dense; allocator = stdallocator)
     return Dense(transpose(m.weight), m.bias, m.σ; allocator)
 end
 
+function Base.show(io::IO, dense::Dense)
+    print(io, "Dense(", size(dense.weights, 1), " => ", size(dense.weights, 2))
+    if dense.activation !== Base.identity
+        print(io, ", ", dense.activation)
+    end
+    print(io, ")")
+end
+
 Flux.@functor Dense (weights, bias)
 function ZygoteRules._pullback(
     cx::AContext, ::typeof(literal_getproperty), x::Dense, ::Val{f}

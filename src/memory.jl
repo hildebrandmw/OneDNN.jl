@@ -213,6 +213,8 @@ function Base.show(io::IO, x::Memory)
 end
 Base.show(io::IO, ::MIME"text/plain", x::Memory) = show(io, x)
 
+Base.any(f::F, x::Memory) where {F <: Function} = any(f, materialize(x))
+
 # for creating OneDNN arguments
 @inline access_pointer(x, offset, context) = pointer(x, offset)
 function setptr!(x::Memory{T}, context::AccessContext = Reading()) where {T}

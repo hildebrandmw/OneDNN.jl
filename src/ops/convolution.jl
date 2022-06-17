@@ -167,6 +167,15 @@ end
 _slice(x::NTuple{N}) where {N} = ntuple(i -> x[(2 * i) - 1], Val(div(N, 2)))
 _subone(x::NTuple{N}) where {N} = ntuple(i -> x[i] - 1, Val(N))
 
+function Base.show(io::IO, conv::Conv)
+    print(io, "Conv((", size(conv.weights, 1), ", ", size(conv.weights, 2), "), ")
+    print(io, size(conv.weights, 3), " => ", size(conv.weights, 4))
+    if conv.activation !== Base.identity
+        print(io, ", ", conv.activation)
+    end
+    print(io, ")")
+end
+
 # Note: OneDNN's convolution is Flux's CrossCor
 function Conv(m::Flux.CrossCor; allocator = stdallocator)
     # Flux stores its padding as a 2N tuple.
@@ -179,7 +188,7 @@ function Conv(m::Flux.CrossCor; allocator = stdallocator)
         m.stride,
         padding = _slice(m.pad),
         dilation = _subone(m.dilation),
-        allocator = stdallocator,
+        allocator = allocator,
     )
 end
 
